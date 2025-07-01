@@ -1,3 +1,4 @@
+import 'package:iprofit_mobile/data/models/wallet/withdrawal_request.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'transaction_model.g.dart';

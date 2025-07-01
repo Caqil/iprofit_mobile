@@ -19,8 +19,7 @@ class DeviceService {
       if (Platform.isAndroid) {
         final androidInfo = await deviceInfo.androidInfo;
         deviceId =
-            androidInfo.id ??
-            'unknown_android_${DateTime.now().millisecondsSinceEpoch}';
+            androidInfo.id;
       } else if (Platform.isIOS) {
         final iosInfo = await deviceInfo.iosInfo;
         deviceId =

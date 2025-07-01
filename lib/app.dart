@@ -12,7 +12,7 @@ class IProfitApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     final appState = ref.watch(appStateProvider);
 
-    return ShadApp.material(
+    return ShadApp.router(
       title: 'IProfit',
       routerConfig: router,
       theme: ShadThemeData(

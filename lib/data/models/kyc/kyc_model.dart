@@ -1,3 +1,4 @@
+import 'package:iprofit_mobile/data/models/auth/register_request.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'kyc_document.dart';
 

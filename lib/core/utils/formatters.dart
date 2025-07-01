@@ -213,7 +213,7 @@ class Formatters {
       case 'cancelled':
         return 'Cancelled';
       default:
-        return status.titleCase;
+        return 'Pending';
     }
   }
 
@@ -235,7 +235,7 @@ class Formatters {
       case 'task_reward':
         return 'Task Reward';
       default:
-        return type.titleCase;
+        return 'Deposit';
     }
   }
 
@@ -251,7 +251,7 @@ class Formatters {
       case 'incomplete':
         return 'Incomplete';
       default:
-        return status.titleCase;
+        return 'Pending Verification';
     }
   }
 
@@ -271,7 +271,7 @@ class Formatters {
       case 'defaulted':
         return 'Defaulted';
       default:
-        return status.titleCase;
+        return 'Under Review';
     }
   }
 

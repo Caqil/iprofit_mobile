@@ -1,3 +1,5 @@
+import 'package:iprofit_mobile/core/utils/formatters.dart';
+
 class Validators {
   // Regular expressions for validation
   static final RegExp _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');

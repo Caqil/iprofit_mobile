@@ -1,3 +1,4 @@
+import 'package:iprofit_mobile/data/models/auth/user_model.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'portfolio_model.g.dart';
