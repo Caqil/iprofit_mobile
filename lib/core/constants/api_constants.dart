@@ -5,7 +5,6 @@ class ApiConstants {
   static String get baseUrl => AppConfig.baseUrl;
 
   // API Version
-  static const String apiVersion = 'v1';
   static String get apiPrefix => '/api';
 
   // Headers

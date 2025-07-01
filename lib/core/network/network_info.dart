@@ -361,7 +361,7 @@ class NetworkDetails {
 
 /// Riverpod provider for NetworkInfo
 @riverpod
-NetworkInfo networkInfo(NetworkInfoRef ref) {
+NetworkInfo networkInfo(Ref ref) {
   final networkInfo = NetworkInfo();
   
   // Start monitoring when provider is created

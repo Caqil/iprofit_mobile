@@ -100,12 +100,7 @@ class DeviceUtils {
           'incremental': androidInfo.version.incremental,
           'codename': androidInfo.version.codename,
         },
-        'display': {
-          'width': androidInfo.displayMetrics.widthPx,
-          'height': androidInfo.displayMetrics.heightPx,
-          'density': androidInfo.displayMetrics.density,
-          'densityDpi': androidInfo.displayMetrics.densityDpi,
-        },
+        
         'isPhysicalDevice': androidInfo.isPhysicalDevice,
       };
     } else if (Platform.isIOS) {
@@ -198,7 +193,11 @@ class DeviceUtils {
   /// Get connectivity type
   static Future<ConnectivityResult> getConnectivityType() async {
     try {
-      return await connectivity.checkConnectivity();
+      final results = await connectivity.checkConnectivity();
+      if (results.isNotEmpty) {
+        return results.first;
+      }
+      return ConnectivityResult.none;
     } catch (e) {
       return ConnectivityResult.none;
     }

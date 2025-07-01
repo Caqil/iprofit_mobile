@@ -134,14 +134,10 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    if (deviceId != null) {
-      headers['x-device-id'] = deviceId;
-    }
-
-    if (fingerprint != null) {
-      headers['x-fingerprint'] = fingerprint;
-    }
-
+    headers['x-device-id'] = deviceId;
+  
+    headers['x-fingerprint'] = fingerprint;
+  
     if (options == null) {
       options = Options(headers: headers);
     } else {

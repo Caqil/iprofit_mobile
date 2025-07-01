@@ -3,12 +3,11 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:iprofit_mobile/core/errors/app_exception.dart';
+import 'package:iprofit_mobile/core/errors/error_handler.dart';
 import '../config/app_config.dart';
 import '../constants/api_constants.dart';
 import '../../data/services/storage_service.dart';
 import '../../data/services/device_service.dart';
-import 'error_handler.dart';
-import 'app_exception.dart';
 
 /// API Interceptor for handling authentication, headers, and request/response processing
 class ApiInterceptor extends Interceptor {
@@ -34,16 +33,6 @@ class ApiInterceptor extends Interceptor {
         _logRequest(options);
       }
 
-      // Record breadcrumb for debugging
-      _errorHandler.recordBreadcrumb(
-        'API Request: ${options.method} ${options.path}',
-        data: {
-          'method': options.method,
-          'path': options.path,
-          'headers': _sanitizeHeaders(options.headers),
-        },
-      );
-
       super.onRequest(options, handler);
     } catch (e) {
       final error = _errorHandler.handleError(e);
@@ -64,16 +53,6 @@ class ApiInterceptor extends Interceptor {
       if (AppConfig.enableDebugLogging) {
         _logResponse(response);
       }
-
-      // Record successful response breadcrumb
-      _errorHandler.recordBreadcrumb(
-        'API Response: ${response.statusCode} ${response.requestOptions.path}',
-        data: {
-          'statusCode': response.statusCode ?? 0,
-          'method': response.requestOptions.method,
-          'path': response.requestOptions.path,
-        },
-      );
 
       // Validate response structure
       if (!_isValidResponse(response)) {
@@ -110,16 +89,6 @@ class ApiInterceptor extends Interceptor {
         _logError(err);
       }
 
-      // Record error breadcrumb
-      _errorHandler.recordBreadcrumb(
-        'API Error: ${err.response?.statusCode ?? 'Network'} ${err.requestOptions.path}',
-        data: {
-          'statusCode': err.response?.statusCode ?? 0,
-          'method': err.requestOptions.method,
-          'path': err.requestOptions.path,
-          'errorType': err.type.name,
-        },
-      );
 
       // Handle token refresh for 401 errors
       if (err.response?.statusCode == 401 &&
@@ -143,7 +112,7 @@ class ApiInterceptor extends Interceptor {
         error: appException,
         type: err.type,
         stackTrace: err.stackTrace,
-        message: appException.message,
+        message: appException.toString(),
       );
 
       super.onError(newError, handler);
