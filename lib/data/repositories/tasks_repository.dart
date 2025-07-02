@@ -19,6 +19,9 @@ class TasksRepository {
   static const String _cacheKeySubmissions = 'task_submissions';
   static const String _cacheKeyCategories = 'task_categories';
   static const String _cacheKeyFilters = 'task_filters';
+  static const String _cacheKeyStatistics = 'task_statistics';
+  static const String _cacheKeyProgress = 'task_progress';
+  static const String _cacheKeyTasksSummary = 'tasks_summary';
   static const Duration _cacheExpiry = Duration(minutes: 10);
 
   TasksRepository(this._apiClient);
@@ -99,7 +102,7 @@ class TasksRepository {
   Future<ApiResponse<TaskModel>> getTaskDetails(String taskId) async {
     try {
       final response = await _apiClient.get<Map<String, dynamic>>(
-        '${ApiConstants.taskDetails}/$taskId',
+        '${ApiConstants.tasks}/$taskId',
       );
 
       if (response.statusCode == ApiConstants.statusOk) {
@@ -116,14 +119,14 @@ class TasksRepository {
     }
   }
 
-  /// Submit task completion
+  /// Submit a task
   Future<ApiResponse<TaskSubmissionResponse>> submitTask({
     required String taskId,
     required TaskSubmission submission,
   }) async {
     try {
       final response = await _apiClient.post<Map<String, dynamic>>(
-        '${ApiConstants.taskSubmit}/$taskId/submit',
+        '${ApiConstants.tasks}/$taskId/submit',
         data: submission.toJson(),
       );
 
@@ -134,8 +137,8 @@ class TasksRepository {
               TaskSubmissionResponse.fromJson(json as Map<String, dynamic>),
         );
 
-        // Clear tasks cache after submission to refresh user status
-        await _clearTasksCache();
+        // Clear submissions cache after successful submission
+        await _clearSubmissionsCache();
 
         return apiResponse;
       }
@@ -256,17 +259,39 @@ class TasksRepository {
   }
 
   /// Get task filters configuration
-  Future<ApiResponse<Map<String, dynamic>>> getTaskFilters() async {
+  Future<ApiResponse<Map<String, dynamic>>> getTaskFilters({
+    bool forceRefresh = false,
+  }) async {
     try {
+      // Check cache first
+      if (!forceRefresh) {
+        final cached = await _getCachedFilters();
+        if (cached != null) {
+          return ApiResponse<Map<String, dynamic>>(
+            success: true,
+            data: cached,
+            message: 'Task filters loaded from cache',
+            timestamp: DateTime.now(),
+          );
+        }
+      }
+
       final response = await _apiClient.get<Map<String, dynamic>>(
         ApiConstants.taskFilters,
       );
 
       if (response.statusCode == ApiConstants.statusOk) {
-        return ApiResponse<Map<String, dynamic>>.fromJson(
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
           response.data!,
           (json) => json as Map<String, dynamic>,
         );
+
+        // Cache the result
+        if (apiResponse.success && apiResponse.data != null) {
+          await _cacheFilters(apiResponse.data!);
+        }
+
+        return apiResponse;
       }
 
       throw AppException.serverError('Failed to fetch task filters');
@@ -332,17 +357,39 @@ class TasksRepository {
   }
 
   /// Get user task statistics
-  Future<ApiResponse<Map<String, dynamic>>> getTaskStatistics() async {
+  Future<ApiResponse<Map<String, dynamic>>> getTaskStatistics({
+    bool forceRefresh = false,
+  }) async {
     try {
+      // Check cache first
+      if (!forceRefresh) {
+        final cached = await _getCachedStatistics();
+        if (cached != null) {
+          return ApiResponse<Map<String, dynamic>>(
+            success: true,
+            data: cached,
+            message: 'Task statistics loaded from cache',
+            timestamp: DateTime.now(),
+          );
+        }
+      }
+
       final response = await _apiClient.get<Map<String, dynamic>>(
         '${ApiConstants.tasks}/statistics',
       );
 
       if (response.statusCode == ApiConstants.statusOk) {
-        return ApiResponse<Map<String, dynamic>>.fromJson(
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
           response.data!,
           (json) => json as Map<String, dynamic>,
         );
+
+        // Cache the result
+        if (apiResponse.success && apiResponse.data != null) {
+          await _cacheStatistics(apiResponse.data!);
+        }
+
+        return apiResponse;
       }
 
       throw AppException.serverError('Failed to fetch task statistics');
@@ -353,17 +400,39 @@ class TasksRepository {
   }
 
   /// Get user task progress/achievements
-  Future<ApiResponse<Map<String, dynamic>>> getTaskProgress() async {
+  Future<ApiResponse<Map<String, dynamic>>> getTaskProgress({
+    bool forceRefresh = false,
+  }) async {
     try {
+      // Check cache first
+      if (!forceRefresh) {
+        final cached = await _getCachedProgress();
+        if (cached != null) {
+          return ApiResponse<Map<String, dynamic>>(
+            success: true,
+            data: cached,
+            message: 'Task progress loaded from cache',
+            timestamp: DateTime.now(),
+          );
+        }
+      }
+
       final response = await _apiClient.get<Map<String, dynamic>>(
         '${ApiConstants.tasks}/progress',
       );
 
       if (response.statusCode == ApiConstants.statusOk) {
-        return ApiResponse<Map<String, dynamic>>.fromJson(
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
           response.data!,
           (json) => json as Map<String, dynamic>,
         );
+
+        // Cache the result
+        if (apiResponse.success && apiResponse.data != null) {
+          await _cacheProgress(apiResponse.data!);
+        }
+
+        return apiResponse;
       }
 
       throw AppException.serverError('Failed to fetch task progress');
@@ -420,6 +489,73 @@ class TasksRepository {
       }
 
       throw AppException.serverError('Failed to fetch recommended tasks');
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw AppException.fromException(e as Exception);
+    }
+  }
+
+  /// Start a task (mark as in progress)
+  Future<ApiResponse<void>> startTask(String taskId) async {
+    try {
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '${ApiConstants.tasks}/$taskId/start',
+        data: {},
+      );
+
+      if (response.statusCode == ApiConstants.statusOk) {
+        // Clear tasks cache after starting task
+        await _clearTasksCache();
+        return ApiResponse<void>.fromJson(response.data!, (json) => null);
+      }
+
+      throw AppException.serverError('Failed to start task');
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw AppException.fromException(e as Exception);
+    }
+  }
+
+  /// Cancel a task (if allowed)
+  Future<ApiResponse<void>> cancelTask(String taskId) async {
+    try {
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '${ApiConstants.tasks}/$taskId/cancel',
+        data: {},
+      );
+
+      if (response.statusCode == ApiConstants.statusOk) {
+        // Clear tasks cache after canceling task
+        await _clearTasksCache();
+        return ApiResponse<void>.fromJson(response.data!, (json) => null);
+      }
+
+      throw AppException.serverError('Failed to cancel task');
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw AppException.fromException(e as Exception);
+    }
+  }
+
+  /// Get featured/highlighted tasks
+  Future<ApiResponse<List<TaskModel>>> getFeaturedTasks({int limit = 5}) async {
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        ApiConstants.getEndpointWithQuery('${ApiConstants.tasks}/featured', {
+          'limit': limit,
+        }),
+      );
+
+      if (response.statusCode == ApiConstants.statusOk) {
+        return ApiResponse<List<TaskModel>>.fromJson(
+          response.data!,
+          (json) => (json as List)
+              .map((item) => TaskModel.fromJson(item as Map<String, dynamic>))
+              .toList(),
+        );
+      }
+
+      throw AppException.serverError('Failed to fetch featured tasks');
     } catch (e) {
       if (e is AppException) rethrow;
       throw AppException.fromException(e as Exception);
@@ -490,6 +626,110 @@ class TasksRepository {
     }
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> getTasksSummary({
+    bool forceRefresh = false,
+    String period = 'monthly', // 'daily', 'weekly', 'monthly', 'yearly'
+  }) async {
+    try {
+      final cacheKey = '${_cacheKeyTasksSummary}_$period';
+
+      // Check cache first
+      if (!forceRefresh) {
+        final cached = await _getCachedTasksSummary(cacheKey);
+        if (cached != null) {
+          return ApiResponse<Map<String, dynamic>>(
+            success: true,
+            data: cached,
+            message: 'Tasks summary loaded from cache',
+            timestamp: DateTime.now(),
+          );
+        }
+      }
+
+      final queryParams = <String, dynamic>{'period': period};
+
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        ApiConstants.getEndpointWithQuery(
+          '${ApiConstants.tasks}/summary',
+          queryParams,
+        ),
+      );
+
+      if (response.statusCode == ApiConstants.statusOk) {
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+          response.data!,
+          (json) => json as Map<String, dynamic>,
+        );
+
+        // Cache the result
+        if (apiResponse.success && apiResponse.data != null) {
+          await _cacheTasksSummary(cacheKey, apiResponse.data!);
+        }
+
+        return apiResponse;
+      }
+
+      throw AppException.serverError('Failed to fetch tasks summary');
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw AppException.fromException(e as Exception);
+    }
+  }
+
+  Future<void> _cacheTasksSummary(
+    String key,
+    Map<String, dynamic> summary,
+  ) async {
+    await StorageService.setCachedData(key, {
+      'data': summary,
+      'cached_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<Map<String, dynamic>?> _getCachedTasksSummary(String key) async {
+    try {
+      final cached = await StorageService.getCachedData(
+        key,
+        maxAge: _cacheExpiry,
+      );
+
+      if (cached != null && cached['data'] != null) {
+        return cached['data'] as Map<String, dynamic>;
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> clearTasksCache() async {
+    try {
+      // Clear direct cache keys
+      await Future.wait([
+        StorageService.removeCachedData(_cacheKeyCategories),
+        StorageService.removeCachedData(_cacheKeyFilters),
+        StorageService.removeCachedData(_cacheKeyStatistics),
+        StorageService.removeCachedData(_cacheKeyProgress),
+      ]);
+
+      // Clear pattern-based cache
+      final cacheInfo = await StorageService.getCacheInfo();
+      final tasksKeys = (cacheInfo['keys'] as List).where((key) {
+        final keyStr = key.toString();
+        return keyStr.startsWith(_cacheKeyTasks) ||
+            keyStr.startsWith(_cacheKeySubmissions) ||
+            keyStr.startsWith(_cacheKeyTasksSummary);
+      }).toList();
+
+      for (final key in tasksKeys) {
+        await StorageService.removeCachedData(key.toString());
+      }
+    } catch (e) {
+      // Handle cache clearing error silently
+    }
+  }
+
   Future<void> _cacheCategories(List<TaskCategory> categories) async {
     await StorageService.setCachedData(_cacheKeyCategories, {
       'data': categories.map((category) => category.toJson()).toList(),
@@ -516,200 +756,85 @@ class TasksRepository {
     }
   }
 
-  Future<void> _clearTasksCache() async {
-    final keys = await StorageService.getCacheInfo();
-    final taskKeys = (keys['keys'] as List)
-        .where((key) => key.toString().startsWith(_cacheKeyTasks))
-        .toList();
-
-    for (final key in taskKeys) {
-      await StorageService.removeCachedData(key.toString());
-    }
+  Future<void> _cacheFilters(Map<String, dynamic> filters) async {
+    await StorageService.setCachedData(_cacheKeyFilters, {
+      'data': filters,
+      'cached_at': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
-  Future<void> _clearSubmissionsCache() async {
-    final keys = await StorageService.getCacheInfo();
-    final submissionKeys = (keys['keys'] as List)
-        .where((key) => key.toString().startsWith(_cacheKeySubmissions))
-        .toList();
-
-    for (final key in submissionKeys) {
-      await StorageService.removeCachedData(key.toString());
-    }
-  }
-
-  /// Clear all tasks cache
-  Future<void> clearTasksCache() async {
-    await _clearTasksCache();
-    await _clearSubmissionsCache();
-    await StorageService.removeCachedData(_cacheKeyCategories);
-  }
-
-  /// Get tasks summary for offline mode
-  Future<Map<String, dynamic>?> getTasksSummary() async {
+  Future<Map<String, dynamic>?> _getCachedFilters() async {
     try {
-      final cached = await _getCachedTasks('${_cacheKeyTasks}_1_20_all_all');
-      if (cached?.data != null) {
-        final tasks = cached!.data;
-        return {
-          'totalTasks': tasks.length,
-          'availableTasks': tasks
-              .where((task) => task.userStatus.canSubmit)
-              .length,
-          'completedTasks': tasks
-              .where((task) => task.userStatus.hasSubmitted)
-              .length,
-          'totalReward': tasks.fold<double>(
-            0,
-            (sum, task) => sum + task.rewardAmount,
-          ),
-          'lastUpdated': DateTime.now().toIso8601String(),
-        };
+      final cached = await StorageService.getCachedData(
+        _cacheKeyFilters,
+        maxAge: _cacheExpiry,
+      );
+
+      if (cached != null && cached['data'] != null) {
+        return cached['data'] as Map<String, dynamic>;
       }
+
       return null;
     } catch (e) {
       return null;
     }
   }
 
-  /// Get cached tasks (for offline mode)
-  Future<List<TaskModel>?> getCachedTasks() async {
+  Future<void> _cacheStatistics(Map<String, dynamic> statistics) async {
+    await StorageService.setCachedData(_cacheKeyStatistics, {
+      'data': statistics,
+      'cached_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<Map<String, dynamic>?> _getCachedStatistics() async {
     try {
-      final cached = await _getCachedTasks('${_cacheKeyTasks}_1_20_all_all');
-      return cached?.data;
+      final cached = await StorageService.getCachedData(
+        _cacheKeyStatistics,
+        maxAge: _cacheExpiry,
+      );
+
+      if (cached != null && cached['data'] != null) {
+        return cached['data'] as Map<String, dynamic>;
+      }
+
+      return null;
     } catch (e) {
       return null;
     }
   }
 
-  /// Utility methods
-  bool canUserSubmitTask(TaskModel task) {
-    return task.userStatus.canSubmit;
+  Future<void> _cacheProgress(Map<String, dynamic> progress) async {
+    await StorageService.setCachedData(_cacheKeyProgress, {
+      'data': progress,
+      'cached_at': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
-  bool hasUserSubmittedTask(TaskModel task) {
-    return task.userStatus.hasSubmitted;
-  }
+  Future<Map<String, dynamic>?> _getCachedProgress() async {
+    try {
+      final cached = await StorageService.getCachedData(
+        _cacheKeyProgress,
+        maxAge: _cacheExpiry,
+      );
 
-  bool isTaskExpired(TaskModel task) {
-    if (task.expiresAt == null) return false;
-    return DateTime.now().isAfter(task.expiresAt!);
-  }
+      if (cached != null && cached['data'] != null) {
+        return cached['data'] as Map<String, dynamic>;
+      }
 
-  bool isTaskAvailable(TaskModel task) {
-    return !isTaskExpired(task) &&
-        task.currentSubmissions < task.maxSubmissions &&
-        canUserSubmitTask(task);
-  }
-
-  String getTaskDifficultyColor(String difficulty) {
-    switch (difficulty.toLowerCase()) {
-      case 'easy':
-        return '#4CAF50'; // Green
-      case 'medium':
-        return '#FF9800'; // Orange
-      case 'hard':
-        return '#F44336'; // Red
-      default:
-        return '#757575'; // Grey
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 
-  String getTaskCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'social media':
-        return 'share';
-      case 'app installation':
-        return 'download';
-      case 'survey':
-        return 'poll';
-      case 'review':
-        return 'star';
-      case 'referral':
-        return 'people';
-      case 'video watch':
-        return 'play_circle';
-      case 'article read':
-        return 'article';
-      case 'registration':
-        return 'person_add';
-      default:
-        return 'task_alt';
-    }
+  /// Clear all task-related cache
+  Future<void> _clearTasksCache() async {
+    await StorageService.removeCachedData('tasks');
   }
 
-  String getSubmissionStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return '#4CAF50'; // Green
-      case 'pending':
-        return '#FF9800'; // Orange
-      case 'rejected':
-        return '#F44336'; // Red
-      case 'under_review':
-        return '#2196F3'; // Blue
-      default:
-        return '#757575'; // Grey
-    }
-  }
-
-  String getSubmissionStatusText(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return 'Approved';
-      case 'pending':
-        return 'Pending Review';
-      case 'rejected':
-        return 'Rejected';
-      case 'under_review':
-        return 'Under Review';
-      default:
-        return 'Unknown';
-    }
-  }
-
-  /// Calculate estimated completion time in minutes
-  int getEstimatedCompletionMinutes(String timeEstimate) {
-    final timeStr = timeEstimate.toLowerCase();
-
-    if (timeStr.contains('minute')) {
-      final match = RegExp(r'(\d+)').firstMatch(timeStr);
-      return int.tryParse(match?.group(1) ?? '5') ?? 5;
-    } else if (timeStr.contains('hour')) {
-      final match = RegExp(r'(\d+)').firstMatch(timeStr);
-      final hours = int.tryParse(match?.group(1) ?? '1') ?? 1;
-      return hours * 60;
-    } else if (timeStr.contains('day')) {
-      final match = RegExp(r'(\d+)').firstMatch(timeStr);
-      final days = int.tryParse(match?.group(1) ?? '1') ?? 1;
-      return days * 24 * 60;
-    }
-
-    return 5; // Default 5 minutes
-  }
-
-  /// Format reward amount
-  String formatRewardAmount(double amount, String currency) {
-    if (currency.toUpperCase() == 'USD') {
-      return '\$${amount.toStringAsFixed(2)}';
-    } else if (currency.toUpperCase() == 'BDT') {
-      return '৳${amount.toStringAsFixed(2)}';
-    }
-    return '$currency ${amount.toStringAsFixed(2)}';
-  }
-
-  /// Check if task is popular
-  bool isTaskPopular(TaskModel task) {
-    return task.taskInfo.isPopular;
-  }
-
-  /// Get task urgency level
-  String getTaskUrgency(TaskModel task) {
-    return task.taskInfo.urgency;
-  }
-
-  /// Calculate task completion rate percentage
-  double getTaskCompletionRate(TaskModel task) {
-    return task.taskInfo.completionRate * 100;
+  /// Clear task submissions cache
+  Future<void> _clearSubmissionsCache() async {
+    await StorageService.removeCachedData('task_submissions');
   }
 }

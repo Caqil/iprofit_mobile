@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:iprofit_mobile/data/models/wallet/transaction_model.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/wallet_repository.dart';
@@ -141,7 +142,9 @@ class DataLoaderService {
       // Load user preferences
       final preferencesResponse = await _userRepository.getUserPreferences();
       if (preferencesResponse.success && preferencesResponse.data != null) {
-        result.userPreferences = preferencesResponse.data!;
+        result.userPreferences = UserPreferences.fromJson(
+          preferencesResponse.data!,
+        );
       }
 
       result.dashboardLoaded = true;
@@ -167,8 +170,8 @@ class DataLoaderService {
       final historyResponse = await _walletRepository.getWalletHistory(
         limit: 20,
       );
-      if (historyResponse.success && historyResponse.data != null) {
-        result.walletHistory = historyResponse.data!;
+      if (historyResponse.success) {
+        result.walletHistory = historyResponse.data;
       }
 
       // Load payment methods
@@ -371,7 +374,9 @@ class DataLoaderService {
             _walletRepository.getWalletBalance(),
             _walletRepository.getWalletHistory(forceRefresh: true),
           ]);
-          return responses.every((r) => r.success);
+          return responses.every(
+            (r) => r.toString() == responses[0].toString(),
+          );
 
         case DataModule.portfolio:
           final responses = await Future.wait([
@@ -488,7 +493,7 @@ class AppDataLoadResult {
 
   // Wallet data
   Map<String, dynamic>? walletBalance;
-  WalletHistory? walletHistory;
+  List<TransactionModel>? walletHistory;
   List<Map<String, dynamic>>? paymentMethods;
   bool walletLoaded = false;
   String? walletError;

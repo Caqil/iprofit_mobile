@@ -61,11 +61,6 @@ class DeviceService {
         'manufacturer': androidInfo.manufacturer,
         'version': androidInfo.version.release,
         'sdkInt': androidInfo.version.sdkInt,
-        'displayMetrics': {
-          'width': androidInfo.displayMetrics.widthPx,
-          'height': androidInfo.displayMetrics.heightPx,
-          'density': androidInfo.displayMetrics.density,
-        },
       };
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;

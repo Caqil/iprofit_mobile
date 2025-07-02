@@ -126,6 +126,36 @@ class StorageService {
     return _settingsBox.get(_onboardingCompletedKey, defaultValue: false);
   }
 
+  static Future<void> setBool(String key, bool value) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs?.setBool(key, value);
+  }
+
+  static Future<bool?> getBool(String key) async {
+    final value = await getString(key);
+    if (value == null) return null;
+    if (value == 'true') return true;
+    if (value == 'false') return false;
+    // Optionally handle integer 0/1 as bool
+    if (value == '1') return true;
+    if (value == '0') return false;
+    return null;
+  }
+
+  static Future<void> setString(String key, String value) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs?.setString(key, value);
+  }
+
+  static Future<String?> getString(String key) async {
+    return _prefs?.getString(key);
+  }
+
+  static Future<void> setInt(String key, int value) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs?.setInt(key, value);
+  }
+
   // Cache management (Hive)
   static Future<void> setCachedData(String key, dynamic data) async {
     try {
