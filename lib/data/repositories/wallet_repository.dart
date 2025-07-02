@@ -1,12 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/network/api_client.dart';
 import '../models/wallet/transaction_model.dart';
-import '../models/wallet/wallet_history.dart';
-import '../models/wallet/deposit_request.dart';
-import '../models/wallet/withdrawal_request.dart';
 import '../models/common/api_response.dart';
 import '../models/common/pagination.dart';
 import '../services/storage_service.dart';

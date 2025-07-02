@@ -10,7 +10,6 @@ import '../repositories/referrals_repository.dart';
 import '../repositories/notifications_repository.dart';
 import '../repositories/kyc_repository.dart';
 import '../models/auth/user_model.dart';
-import '../models/wallet/wallet_history.dart';
 import '../models/portfolio/portfolio_model.dart';
 import '../models/portfolio/investment_model.dart';
 import '../models/loans/loan_model.dart';

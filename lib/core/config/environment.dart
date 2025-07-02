@@ -28,7 +28,8 @@ class EnvironmentConfig {
   // Development Environment
   static const EnvironmentConfig development = EnvironmentConfig(
     name: 'Development',
-    apiBaseUrl: 'https://dev-api.iprofit.com',
+    apiBaseUrl:
+        'https://9548-2001-448a-10b0-5eb1-c1e9-2d8d-c8d4-4452.ngrok-free.app',
     wsBaseUrl: 'wss://dev-ws.iprofit.com',
     firebaseProjectId: 'iprofit-dev',
     sentryDsn: '', // Empty for development

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 /// Base exception class for the application
 abstract class AppException implements Exception {
@@ -33,8 +34,7 @@ abstract class AppException implements Exception {
         );
 
       case DioExceptionType.unknown:
-      default:
-        if (dioException.message?.contains('SocketException') == true) {
+      if (dioException.message?.contains('SocketException') == true) {
           return const NetworkException('No internet connection available');
         }
         return UnknownException(
@@ -170,80 +170,80 @@ class UnknownException extends AppException {
 }
 
 class NetworkException extends AppException {
-  const NetworkException(String message) : super(message);
+  const NetworkException(super.message);
 }
 
 class ServerException extends AppException {
-  const ServerException(String message) : super(message);
+  const ServerException(super.message);
 }
 
 class BadRequestException extends AppException {
-  const BadRequestException(String message) : super(message);
+  const BadRequestException(super.message);
 }
 
 class UnauthorizedException extends AppException {
-  const UnauthorizedException(String message) : super(message);
+  const UnauthorizedException(super.message);
 }
 
 class ForbiddenException extends AppException {
-  const ForbiddenException(String message) : super(message);
+  const ForbiddenException(super.message);
 }
 
 class NotFoundException extends AppException {
-  const NotFoundException(String message) : super(message);
+  const NotFoundException(super.message);
 }
 
 class ValidationException extends AppException {
-  const ValidationException(String message, [this.details]) : super(message);
+  const ValidationException(super.message, [this.details]);
   final Map<String, dynamic>? details;
 }
 
 class RateLimitedException extends AppException {
-  const RateLimitedException(String message) : super(message);
+  const RateLimitedException(super.message);
 }
 
 class RequestCancelledException extends AppException {
-  const RequestCancelledException(String message) : super(message);
+  const RequestCancelledException(super.message);
 }
 
 class TokenExpiredException extends AppException {
-  const TokenExpiredException(String message) : super(message);
+  const TokenExpiredException(super.message);
 }
 
 class PermissionDeniedException extends AppException {
-  const PermissionDeniedException(String message) : super(message);
+  const PermissionDeniedException(super.message);
 }
 
 class ParseException extends AppException {
-  const ParseException(String message) : super(message);
+  const ParseException(super.message);
 }
 
 class CacheException extends AppException {
-  const CacheException(String message) : super(message);
+  const CacheException(super.message);
 }
 
 class FileException extends AppException {
-  const FileException(String message) : super(message);
+  const FileException(super.message);
 }
 
 class BiometricException extends AppException {
-  const BiometricException(String message) : super(message);
+  const BiometricException(super.message);
 }
 
 class DeviceException extends AppException {
-  const DeviceException(String message) : super(message);
+  const DeviceException(super.message);
 }
 
 class BusinessLogicException extends AppException {
-  const BusinessLogicException(String message) : super(message);
+  const BusinessLogicException(super.message);
 }
 
 class MaintenanceException extends AppException {
-  const MaintenanceException(String message) : super(message);
+  const MaintenanceException(super.message);
 }
 
 class FeatureUnavailableException extends AppException {
-  const FeatureUnavailableException(String message) : super(message);
+  const FeatureUnavailableException(super.message);
 }
 
 /// Extension methods for AppException
@@ -509,11 +509,17 @@ class ErrorLogger {
     // In production, you would send this to your analytics service
     // For now, we'll just print it in debug mode
     if (exception.severity == ErrorSeverity.high) {
-      print('🔴 HIGH SEVERITY ERROR: $errorData');
+      if (kDebugMode) {
+        print('🔴 HIGH SEVERITY ERROR: $errorData');
+      }
     } else if (exception.severity == ErrorSeverity.medium) {
-      print('🟡 MEDIUM SEVERITY ERROR: $errorData');
+      if (kDebugMode) {
+        print('🟡 MEDIUM SEVERITY ERROR: $errorData');
+      }
     } else {
-      print('🟢 LOW SEVERITY ERROR: $errorData');
+      if (kDebugMode) {
+        print('🟢 LOW SEVERITY ERROR: $errorData');
+      }
     }
 
     // Send to crash reporting service (Firebase Crashlytics, Sentry, etc.)

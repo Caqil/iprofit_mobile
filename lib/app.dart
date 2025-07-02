@@ -5,7 +5,7 @@ import 'router/app_router.dart';
 import 'presentation/providers/app_state_provider.dart';
 
 class IProfitApp extends ConsumerWidget {
-  const IProfitApp({Key? key}) : super(key: key);
+  const IProfitApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
