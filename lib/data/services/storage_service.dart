@@ -156,6 +156,12 @@ class StorageService {
     await _prefs?.setInt(key, value);
   }
 
+  static Future<int?> getInt(String key) async {
+    final value = await getString(key);
+    if (value == null) return null;
+    return int.tryParse(value);
+  }
+
   // Cache management (Hive)
   static Future<void> setCachedData(String key, dynamic data) async {
     try {
