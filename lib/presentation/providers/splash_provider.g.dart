@@ -178,7 +178,7 @@ final hasInternetConnectionProvider = AutoDisposeProvider<bool>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef HasInternetConnectionRef = AutoDisposeProviderRef<bool>;
-String _$splashHash() => r'3c0646e9363119964b0d4dfab217c65b4ab0eba3';
+String _$splashHash() => r'dacee2ddbe5433109ea394ca868f141bc4784715';
 
 /// See also [Splash].
 @ProviderFor(Splash)

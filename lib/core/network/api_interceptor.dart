@@ -89,7 +89,6 @@ class ApiInterceptor extends Interceptor {
         _logError(err);
       }
 
-
       // Handle token refresh for 401 errors
       if (err.response?.statusCode == 401 &&
           !err.requestOptions.path.contains('/auth/')) {

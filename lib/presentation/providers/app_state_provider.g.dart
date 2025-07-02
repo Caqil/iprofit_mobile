@@ -139,7 +139,7 @@ final appErrorProvider = AutoDisposeProvider<AppError?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AppErrorRef = AutoDisposeProviderRef<AppError?>;
-String _$appStateNotifierHash() => r'b1aea7085b65d06efd9406e61656a19f1a37581e';
+String _$appStateNotifierHash() => r'6cf088819a2695d805a75b00edb0c4b954b2758a';
 
 /// See also [AppStateNotifier].
 @ProviderFor(AppStateNotifier)

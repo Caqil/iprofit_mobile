@@ -11,8 +11,6 @@ import '../models/auth/user_model.dart';
 import '../models/common/api_response.dart';
 import '../repositories/auth_repository.dart';
 import 'storage_service.dart';
-import 'device_service.dart';
-import 'notification_service.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService(ref.read(authRepositoryProvider));
