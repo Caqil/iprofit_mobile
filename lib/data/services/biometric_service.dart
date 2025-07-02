@@ -534,7 +534,9 @@ class BiometricService {
 enum BiometricState {
   /// State is unknown (not initialized)
   unknown,
-
+  failure,
+  success,
+authenticating,waiting,
   /// Device does not support biometric authentication
   notSupported,
 

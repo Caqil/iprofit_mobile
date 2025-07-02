@@ -157,7 +157,7 @@ class AppStateNotifier extends _$AppStateNotifier {
       await _initializeNotifications();
 
       // Set up listeners
-      _setupListeners();
+     // _setupListeners();
 
       // Start background sync
       _startBackgroundSync();
@@ -261,8 +261,8 @@ class AppStateNotifier extends _$AppStateNotifier {
   /// Initialize notification settings
   Future<void> _initializeNotifications() async {
     try {
-      final isEnabled = await NotificationService.areNotificationsEnabled();
-      state = state.copyWith(notificationsEnabled: isEnabled);
+      // final isEnabled = await NotificationService.areNotificationsEnabled();
+      // state = state.copyWith(notificationsEnabled: isEnabled);
     } catch (e) {
       state = state.copyWith(notificationsEnabled: false);
     }
@@ -271,46 +271,46 @@ class AppStateNotifier extends _$AppStateNotifier {
   // ===== LISTENERS SETUP =====
 
   /// Set up real-time listeners for state changes
-  void _setupListeners() {
-    // Listen to authentication changes
-    final authService = ref.read(authServiceProvider);
-    _authSubscription = authService.authStateStream.listen((authState) {
-      final isAuthenticated = authState == AuthState.authenticated;
-      state = state.copyWith(
-        isAuthenticated: isAuthenticated,
-        currentUser: isAuthenticated ? authService.currentUser : null,
-      );
-    });
+  // void _setupListeners() {
+  //   // Listen to authentication changes
+  //   final authService = ref.read(authServiceProvider);
+  //   _authSubscription = authService.authStateStream.listen((authState) {
+  //     final isAuthenticated = authState == AuthState.authenticated;
+  //     state = state.copyWith(
+  //       isAuthenticated: isAuthenticated,
+  //       currentUser: isAuthenticated ? authService.currentUser : null,
+  //     );
+  //   });
 
-    // Listen to user changes
-    authService.userStream.listen((user) {
-      state = state.copyWith(currentUser: user);
-    });
+  //   // Listen to user changes
+  //   authService.userStream.listen((user) {
+  //     state = state.copyWith(currentUser: user);
+  //   });
 
-    // Listen to network changes
-    _networkSubscription = ref.listen(networkInfoStateProvider, (
-      previous,
-      next,
-    ) {
-      state = state.copyWith(isOnline: next.isConnected);
-    });
+  //   // Listen to network changes
+  //   _networkSubscription = ref.listen(networkInfoStateProvider, (
+  //     previous,
+  //     next,
+  //   ) {
+  //     state = state.copyWith(isOnline: next.isConnected);
+  //   });
 
-    // Listen to notification changes
-    final notificationService = ref.read(notificationServiceProvider);
-    _notificationSubscription = notificationService.notificationStream.listen((
-      notification,
-    ) {
-      // Handle incoming notifications
-      _handleIncomingNotification(notification);
-    });
+  //   // Listen to notification changes
+  //   final notificationService = ref.read(notificationServiceProvider);
+  //   _notificationSubscription = notificationService.notificationStream.listen((
+  //     notification,
+  //   ) {
+  //     // Handle incoming notifications
+  //     _handleIncomingNotification(notification);
+  //   });
 
-    // Dispose listeners when provider is disposed
-    ref.onDispose(() {
-      _authSubscription?.cancel();
-      _notificationSubscription?.cancel();
-      _syncTimer?.cancel();
-    });
-  }
+  //   // Dispose listeners when provider is disposed
+  //   ref.onDispose(() {
+  //     _authSubscription?.cancel();
+  //     _notificationSubscription?.cancel();
+  //     _syncTimer?.cancel();
+  //   });
+  // }
 
   // ===== APP SETTINGS MANAGEMENT =====
 
@@ -367,22 +367,22 @@ class AppStateNotifier extends _$AppStateNotifier {
   }
 
   /// Update notification settings
-  Future<void> toggleNotifications() async {
-    try {
-      final currentValue = state.notificationsEnabled;
-      final newValue = await NotificationService.requestPermissions();
+  // Future<void> toggleNotifications() async {
+  //   try {
+  //     final currentValue = state.notificationsEnabled;
+  //     final newValue = await NotificationService.requestPermissions();
 
-      if (newValue != currentValue) {
-        await StorageService.setBool(
-          StorageKeys.notificationsEnabled,
-          newValue,
-        );
-        state = state.copyWith(notificationsEnabled: newValue);
-      }
-    } catch (e) {
-      _setError('Failed to toggle notifications');
-    }
-  }
+  //     if (newValue != currentValue) {
+  //       await StorageService.setBool(
+  //         StorageKeys.notificationsEnabled,
+  //         newValue,
+  //       );
+  //       state = state.copyWith(notificationsEnabled: newValue);
+  //     }
+  //   } catch (e) {
+  //     _setError('Failed to toggle notifications');
+  //   }
+  // }
 
   // ===== DATA SYNCHRONIZATION =====
 
@@ -414,7 +414,7 @@ class AppStateNotifier extends _$AppStateNotifier {
 
       // Perform specific sync operations
       await _syncUserData();
-      await _syncNotifications();
+     // await _syncNotifications();
     } catch (e) {
       // Silent fail for background sync
     }
@@ -434,14 +434,14 @@ class AppStateNotifier extends _$AppStateNotifier {
   }
 
   /// Sync notifications
-  Future<void> _syncNotifications() async {
-    try {
-      // Re-register FCM token if needed
-      await NotificationService.registerFcmToken();
-    } catch (e) {
-      // Silent fail
-    }
-  }
+  // Future<void> _syncNotifications() async {
+  //   try {
+  //     // Re-register FCM token if needed
+  //     await NotificationService.registerFcmToken();
+  //   } catch (e) {
+  //     // Silent fail
+  //   }
+  // }
 
   // ===== ERROR HANDLING =====
 

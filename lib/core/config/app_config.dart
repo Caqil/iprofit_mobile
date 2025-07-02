@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
+//import 'package:firebase_core/firebase_core.dart';
 import 'package:iprofit_mobile/data/services/notification_service.dart';
 import 'package:iprofit_mobile/data/services/storage_service.dart';
 import 'environment.dart';
@@ -100,13 +100,13 @@ class AppConfig {
       _environment = env ?? _determineEnvironment();
 
       // Initialize Firebase
-      if (!Firebase.apps.isNotEmpty) {
-        await Firebase.initializeApp();
-      }
+      // if (!Firebase.apps.isNotEmpty) {
+      //   await Firebase.initializeApp();
+      // }
 
       // Initialize services
       await StorageService.initialize();
-      await NotificationService.initialize();
+     // await NotificationService.initialize();
 
       // Initialize device utilities
       await DeviceUtils.getDeviceId();

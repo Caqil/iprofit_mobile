@@ -149,7 +149,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               const Spacer(flex: 2),
 
               // Loading Section
-              if (splashState.isLoading || splashState.isRefreshing) ...[
+              if (splashState.isLoading) ...[
                 // Progress Bar
                 AnimatedBuilder(
                   animation: _progressAnimation,
@@ -161,9 +161,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           backgroundColor: Theme.of(
                             context,
                           ).colorScheme.surfaceVariant,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
                         ),
 
                         const SizedBox(height: 16),
@@ -256,8 +253,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ],
 
               // Failed Modules Info (if some modules failed but core succeeded)
-              if (splashState.canProceed &&
-                  splashState.failedModules.isNotEmpty) ...[
+              if (splashState.canProceed) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -295,7 +291,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ],
 
               // Offline Mode Indicator
-              if (splashState.hasOfflineData && !splashState.isLoading) ...[
+              if (!splashState.hasInternetConnection &&
+                  !splashState.isLoading) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -352,7 +349,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Add a small delay for better UX
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
-        if (state.isAuthenticated) {
+        if (state.isAuthValid) {
           context.go(RoutePaths.dashboard);
         } else {
           context.go(RoutePaths.login);

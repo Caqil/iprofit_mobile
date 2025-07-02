@@ -414,7 +414,7 @@ class AuthService {
 
     // Clear FCM token registration
     try {
-      await NotificationService.unregisterFcmToken();
+      //await NotificationService.unregisterFcmToken();
     } catch (e) {
       if (kDebugMode) {
         print('Failed to unregister FCM token: $e');
@@ -433,7 +433,7 @@ class AuthService {
   /// Register device for push notifications
   Future<void> _registerDevice() async {
     try {
-      await NotificationService.registerFcmToken();
+      //await NotificationService.registerFcmToken();
     } catch (e) {
       if (kDebugMode) {
         print('Failed to register device: $e');

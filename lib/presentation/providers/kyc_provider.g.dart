@@ -160,7 +160,7 @@ final canSubmitKYCProvider = AutoDisposeProvider<bool>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CanSubmitKYCRef = AutoDisposeProviderRef<bool>;
-String _$kYCHash() => r'ed65c58f49a3dfe8307b066e268736825300840c';
+String _$kYCHash() => r'e2932191345c4942af5fc456a1d6c4b8ed49a75f';
 
 /// See also [KYC].
 @ProviderFor(KYC)

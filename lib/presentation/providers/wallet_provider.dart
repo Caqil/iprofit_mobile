@@ -210,9 +210,7 @@ class Wallet extends _$Wallet {
   void _setupAutoRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(minutes: 3), (_) {
-      if (mounted) {
-        loadBalance(forceRefresh: true); // Silently update balance
-      }
+      loadBalance(forceRefresh: true); // Silently update balance
     });
   }
 
@@ -310,7 +308,7 @@ class Wallet extends _$Wallet {
       } else {
         state = state.copyWith(
           isLoadingTransactions: false,
-          error: response.message ?? 'Failed to load transactions',
+          error: 'Failed to load transactions',
         );
       }
     } catch (e) {
@@ -401,24 +399,30 @@ class Wallet extends _$Wallet {
     );
   }
 
-  // ===== DEPOSIT OPERATIONS =====
+  // ===== DEPOSIT OPERATIONS - FIXED: Using correct repository method =====
 
   /// Make a deposit
   Future<bool> makeDeposit({
     required double amount,
+    required String currency,
     required String gateway,
-    required String paymentMethod,
-    Map<String, dynamic>? additionalData,
+    required String depositMethod,
+    Map<String, dynamic>? gatewayData,
+    bool acceptTerms = true,
+    bool confirmAmount = true,
   }) async {
     try {
       state = state.copyWith(isProcessingTransaction: true, error: null);
 
       final walletRepository = ref.read(walletRepositoryProvider);
-      final response = await walletRepository.deposit(
+      final response = await walletRepository.createDeposit(
         amount: amount,
+        currency: currency,
         gateway: gateway,
-        paymentMethod: paymentMethod,
-        additionalData: additionalData,
+        depositMethod: depositMethod,
+        gatewayData: gatewayData,
+        acceptTerms: acceptTerms,
+        confirmAmount: confirmAmount,
       );
 
       if (response.success) {
@@ -448,24 +452,28 @@ class Wallet extends _$Wallet {
     }
   }
 
-  // ===== WITHDRAWAL OPERATIONS =====
+  // ===== WITHDRAWAL OPERATIONS - FIXED: Using correct repository method =====
 
   /// Make a withdrawal
   Future<bool> makeWithdrawal({
     required double amount,
-    required String gateway,
-    required String paymentMethod,
-    Map<String, dynamic>? additionalData,
+    required String currency,
+    required String withdrawalMethod,
+    required Map<String, dynamic> accountDetails,
+    bool urgentWithdrawal = false,
+    String? twoFactorToken,
   }) async {
     try {
       state = state.copyWith(isProcessingTransaction: true, error: null);
 
       final walletRepository = ref.read(walletRepositoryProvider);
-      final response = await walletRepository.withdraw(
+      final response = await walletRepository.createWithdrawal(
         amount: amount,
-        gateway: gateway,
-        paymentMethod: paymentMethod,
-        additionalData: additionalData,
+        currency: currency,
+        withdrawalMethod: withdrawalMethod,
+        accountDetails: accountDetails,
+        urgentWithdrawal: urgentWithdrawal,
+        twoFactorToken: twoFactorToken,
       );
 
       if (response.success) {
@@ -495,24 +503,26 @@ class Wallet extends _$Wallet {
     }
   }
 
-  // ===== TRANSFER OPERATIONS =====
+  // ===== TRANSFER OPERATIONS - FIXED: Using correct repository method =====
 
   /// Transfer funds to another user
   Future<bool> transferFunds({
     required double amount,
     required String recipientId,
+    required String currency,
     String? note,
-    Map<String, dynamic>? additionalData,
+    String? twoFactorToken,
   }) async {
     try {
       state = state.copyWith(isProcessingTransaction: true, error: null);
 
       final walletRepository = ref.read(walletRepositoryProvider);
-      final response = await walletRepository.transfer(
-        amount: amount,
+      final response = await walletRepository.transferFunds(
         recipientId: recipientId,
+        amount: amount,
+        currency: currency,
         note: note,
-        additionalData: additionalData,
+        twoFactorToken: twoFactorToken,
       );
 
       if (response.success) {
@@ -541,10 +551,14 @@ class Wallet extends _$Wallet {
   // ===== PAYMENT METHODS =====
 
   /// Load payment methods
-  Future<void> loadPaymentMethods({bool forceRefresh = false}) async {
+  Future<void> loadPaymentMethods({
+    String type = 'all',
+    bool forceRefresh = false,
+  }) async {
     try {
       final walletRepository = ref.read(walletRepositoryProvider);
       final response = await walletRepository.getPaymentMethods(
+        type: type,
         forceRefresh: forceRefresh,
       );
 
@@ -556,55 +570,24 @@ class Wallet extends _$Wallet {
     }
   }
 
+  // REMOVED: Payment method management methods don't exist in repository
+  // These would need to be implemented in the repository first
+  /*
   /// Add payment method
   Future<bool> addPaymentMethod({
     required String type,
     required Map<String, dynamic> details,
   }) async {
-    try {
-      final walletRepository = ref.read(walletRepositoryProvider);
-      final response = await walletRepository.addPaymentMethod(
-        type: type,
-        details: details,
-      );
-
-      if (response.success) {
-        await loadPaymentMethods(forceRefresh: true);
-        return true;
-      } else {
-        state = state.copyWith(
-          error: response.message ?? 'Failed to add payment method',
-        );
-        return false;
-      }
-    } catch (e) {
-      state = state.copyWith(error: _getErrorMessage(e));
-      return false;
-    }
+    // TODO: Implement in WalletRepository first
+    throw UnimplementedError('Payment method management not yet implemented');
   }
 
   /// Remove payment method
   Future<bool> removePaymentMethod(String paymentMethodId) async {
-    try {
-      final walletRepository = ref.read(walletRepositoryProvider);
-      final response = await walletRepository.removePaymentMethod(
-        paymentMethodId,
-      );
-
-      if (response.success) {
-        await loadPaymentMethods(forceRefresh: true);
-        return true;
-      } else {
-        state = state.copyWith(
-          error: response.message ?? 'Failed to remove payment method',
-        );
-        return false;
-      }
-    } catch (e) {
-      state = state.copyWith(error: _getErrorMessage(e));
-      return false;
-    }
+    // TODO: Implement in WalletRepository first
+    throw UnimplementedError('Payment method management not yet implemented');
   }
+  */
 
   // ===== LIMITS AND GATEWAYS =====
 
@@ -640,15 +623,15 @@ class Wallet extends _$Wallet {
     }
   }
 
-  /// Load wallet summary
+  /// Load wallet summary - FIXED: Using correct parameter name
   Future<void> loadSummary({
-    String timeframe = '30d',
+    String period = 'monthly', // Changed from 'timeframe' to 'period'
     bool forceRefresh = false,
   }) async {
     try {
       final walletRepository = ref.read(walletRepositoryProvider);
       final response = await walletRepository.getWalletSummary(
-        timeframe: timeframe,
+        period: period, // Use 'period' instead of 'timeframe'
         forceRefresh: forceRefresh,
       );
 

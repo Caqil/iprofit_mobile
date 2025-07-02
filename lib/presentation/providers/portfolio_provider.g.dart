@@ -184,7 +184,7 @@ final investmentDistributionProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef InvestmentDistributionRef = AutoDisposeProviderRef<Map<String, double>>;
-String _$portfolioHash() => r'852127dbd0d59dd81cc4728b2e7d09e7fef2c5db';
+String _$portfolioHash() => r'c8ac62a68ca93b7f365a07dd065d76ec65f934da';
 
 /// See also [Portfolio].
 @ProviderFor(Portfolio)

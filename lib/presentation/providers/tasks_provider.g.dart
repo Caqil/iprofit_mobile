@@ -202,7 +202,7 @@ final potentialTaskEarningsProvider = AutoDisposeProvider<double>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PotentialTaskEarningsRef = AutoDisposeProviderRef<double>;
-String _$tasksHash() => r'007cb406fa59ac233951086412d4c0a27df5c96e';
+String _$tasksHash() => r'579d097f90570a412685126a8254175fc45c1af6';
 
 /// See also [Tasks].
 @ProviderFor(Tasks)

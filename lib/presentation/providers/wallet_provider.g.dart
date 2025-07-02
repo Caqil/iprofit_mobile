@@ -207,7 +207,7 @@ final paymentMethodsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PaymentMethodsRef = AutoDisposeProviderRef<List<Map<String, dynamic>>>;
-String _$walletHash() => r'3781716658794a2756065566dd45823f44119ed1';
+String _$walletHash() => r'614b6c8d4fca23adeceb84d09b8fcc65f23822d3';
 
 /// See also [Wallet].
 @ProviderFor(Wallet)

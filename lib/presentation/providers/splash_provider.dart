@@ -1,12 +1,13 @@
 // lib/presentation/providers/splash_provider.dart
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:iprofit_mobile/core/constants/storage_keys.dart';
+import 'package:iprofit_mobile/core/network/network_info.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../data/services/auth_service.dart';
 import '../../data/services/storage_service.dart';
-import '../../data/services/network_service.dart';
 import '../../data/services/notification_service.dart';
 import '../../data/services/device_service.dart';
 import '../../data/services/data_loader_service.dart';
@@ -19,13 +20,7 @@ part 'splash_provider.g.dart';
 // ============================================================================
 
 /// Splash screen states
-enum SplashStatus {
-  initializing,
-  checkingAuth,
-  loadingData,
-  completed,
-  error,
-}
+enum SplashStatus { initializing, checkingAuth, loadingData, completed, error }
 
 /// Splash provider state model
 class SplashState {
@@ -69,7 +64,8 @@ class SplashState {
       error: error,
       isFirstLaunch: isFirstLaunch ?? this.isFirstLaunch,
       needsOnboarding: needsOnboarding ?? this.needsOnboarding,
-      hasInternetConnection: hasInternetConnection ?? this.hasInternetConnection,
+      hasInternetConnection:
+          hasInternetConnection ?? this.hasInternetConnection,
       isAuthValid: isAuthValid ?? this.isAuthValid,
       initializationSteps: initializationSteps ?? this.initializationSteps,
     );
@@ -78,9 +74,10 @@ class SplashState {
   // Convenience getters
   bool get hasError => error != null;
   bool get isCompleted => status == SplashStatus.completed;
-  bool get isLoading => status != SplashStatus.completed && status != SplashStatus.error;
+  bool get isLoading =>
+      status != SplashStatus.completed && status != SplashStatus.error;
   bool get canProceed => isCompleted && !hasError;
-  
+
   /// Get next route based on app state
   String get nextRoute {
     if (hasError) return '/error';
@@ -118,14 +115,14 @@ class Splash extends _$Splash {
 
   /// Perform the complete initialization sequence
   Future<void> _performInitializationSequence() async {
-    final steps = [
+    final steps = {
       'storage': false,
       'network': false,
       'device': false,
       'notifications': false,
       'auth': false,
       'data': false,
-    ];
+    };
 
     state = state.copyWith(
       status: SplashStatus.initializing,
@@ -149,9 +146,14 @@ class Splash extends _$Splash {
     });
 
     // Step 4: Initialize notifications
-    await _updateStep('notifications', 'Setting up notifications...', 40.0, () async {
-      await _initializeNotifications();
-    });
+    await _updateStep(
+      'notifications',
+      'Setting up notifications...',
+      40.0,
+      () async {
+       // await _initializeNotifications();
+      },
+    );
 
     // Step 5: Check authentication
     await _updateStep('auth', 'Checking authentication...', 60.0, () async {
@@ -185,10 +187,7 @@ class Splash extends _$Splash {
     double progress,
     Future<void> Function() action,
   ) async {
-    state = state.copyWith(
-      message: message,
-      progress: progress,
-    );
+    state = state.copyWith(message: message, progress: progress);
 
     try {
       await action();
@@ -202,7 +201,7 @@ class Splash extends _$Splash {
   void _markStepComplete(String stepName, double progress) {
     final updatedSteps = Map<String, bool>.from(state.initializationSteps);
     updatedSteps[stepName] = true;
-    
+
     state = state.copyWith(
       initializationSteps: updatedSteps,
       progress: progress,
@@ -213,13 +212,15 @@ class Splash extends _$Splash {
 
   /// Check if this is the first app launch
   Future<void> _checkFirstLaunch() async {
-    final hasLaunched = await StorageService.getBool(StorageKeys.hasLaunched) ?? false;
-    final hasCompletedOnboarding = await StorageService.getBool(StorageKeys.onboardingCompleted) ?? false;
-    
+    final hasLaunched =
+        await StorageService.getBool(StorageKeys.isFirstLaunch) ?? false;
+    final hasCompletedOnboarding =
+        await StorageService.getBool(StorageKeys.onboardingCompleted) ?? false;
+
     if (!hasLaunched) {
-      await StorageService.setBool(StorageKeys.hasLaunched, true);
+      await StorageService.setBool(StorageKeys.isFirstLaunch, true);
     }
-    
+
     state = state.copyWith(
       isFirstLaunch: !hasLaunched,
       needsOnboarding: !hasCompletedOnboarding,
@@ -228,11 +229,11 @@ class Splash extends _$Splash {
 
   /// Check network connectivity
   Future<void> _checkNetworkConnectivity() async {
-    final networkService = ref.read(networkServiceProvider);
-    final isConnected = await networkService.isConnected();
-    
+    final networkService = ref.read(networkInfoStateProvider);
+    final isConnected = networkService.isInternetAccessible;
+
     state = state.copyWith(hasInternetConnection: isConnected);
-    
+
     if (!isConnected) {
       // Still continue initialization in offline mode
       // The app should handle offline scenarios gracefully
@@ -242,47 +243,45 @@ class Splash extends _$Splash {
   /// Initialize device services
   Future<void> _initializeDeviceServices() async {
     try {
-      await DeviceService.initialize();
-      
+
       // Get device info for debugging/analytics
-      final deviceInfo = await DeviceService.getDeviceInfo();
-      
+      final deviceInfo = await DeviceService.getFullDeviceInfo();
+
       // Store device fingerprint if needed
       final deviceId = await DeviceService.getDeviceId();
       await StorageService.setString(StorageKeys.deviceId, deviceId);
-      
     } catch (e) {
       // Non-critical error, continue initialization
     }
   }
 
   /// Initialize notification services
-  Future<void> _initializeNotifications() async {
-    try {
-      await NotificationService.initialize();
-      
-      // Request permissions if needed
-      final hasPermission = await NotificationService.requestPermission();
-      
-      if (hasPermission) {
-        // Register FCM token
-        await NotificationService.registerFcmToken();
-      }
-    } catch (e) {
-      // Non-critical error, continue initialization
-    }
-  }
+  // Future<void> _initializeNotifications() async {
+  //   try {
+  //     await NotificationService.initialize();
+
+  //     // Request permissions if needed
+  //     final hasPermission = await NotificationService.requestPermissions();
+
+  //     if (hasPermission) {
+  //       // Register FCM token
+  //       await NotificationService.registerFcmToken();
+  //     }
+  //   } catch (e) {
+  //     // Non-critical error, continue initialization
+  //   }
+  // }
 
   /// Check authentication status
   Future<void> _checkAuthentication() async {
     state = state.copyWith(status: SplashStatus.checkingAuth);
-    
+
     try {
       final authService = ref.read(authServiceProvider);
       final isAuthenticated = await authService.checkAuthStatus();
-      
+
       state = state.copyWith(isAuthValid: isAuthenticated);
-      
+
       if (isAuthenticated) {
         // Update auth provider state
         final authNotifier = ref.read(authProvider.notifier);
@@ -299,22 +298,21 @@ class Splash extends _$Splash {
     if (!state.isAuthValid || !state.hasInternetConnection) {
       return; // Skip data loading if not authenticated or offline
     }
-    
+
     state = state.copyWith(status: SplashStatus.loadingData);
-    
+
     try {
       final dataLoaderService = ref.read(dataLoaderServiceProvider);
-      
+
       // Load critical data only (non-blocking)
-      await dataLoaderService.loadCriticalData(
+      await dataLoaderService.loadAppData(
         onProgress: (message) {
           state = state.copyWith(message: message);
         },
       );
-      
+
       // Load remaining data in background after splash
       _loadBackgroundData();
-      
     } catch (e) {
       // Data loading failed, but continue to app
       // The app should handle missing data gracefully
@@ -327,7 +325,7 @@ class Splash extends _$Splash {
     Future.microtask(() async {
       try {
         final dataLoaderService = ref.read(dataLoaderServiceProvider);
-        await dataLoaderService.loadAllAppData();
+        await dataLoaderService.loadAppData();
       } catch (e) {
         // Silent fail for background data loading
       }
@@ -341,15 +339,14 @@ class Splash extends _$Splash {
     try {
       // Implement version check logic here
       // You might want to call your API to check for updates
-      
+
       final currentVersion = AppConstants.appVersion;
-      
+
       // For now, just simulate a version check
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       // If update is required, you could navigate to update screen
       // or show a dialog
-      
     } catch (e) {
       // Silent fail for version check
     }
@@ -362,12 +359,11 @@ class Splash extends _$Splash {
     try {
       // Implement maintenance check logic here
       // Call your API to check maintenance status
-      
+
       await Future.delayed(const Duration(milliseconds: 300));
-      
+
       // For now, return false (no maintenance)
       return false;
-      
     } catch (e) {
       // If check fails, assume no maintenance
       return false;
@@ -422,7 +418,7 @@ class Splash extends _$Splash {
         .where((completed) => completed)
         .length;
     final totalSteps = state.initializationSteps.length;
-    
+
     if (totalSteps == 0) return 0.0;
     return (completedSteps / totalSteps) * 100.0;
   }
@@ -496,5 +492,7 @@ String nextRoute(Ref ref) {
 /// Provider for internet connectivity status
 @riverpod
 bool hasInternetConnection(Ref ref) {
-  return ref.watch(splashProvider.select((state) => state.hasInternetConnection));
+  return ref.watch(
+    splashProvider.select((state) => state.hasInternetConnection),
+  );
 }

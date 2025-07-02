@@ -218,7 +218,7 @@ final nextEmiDueDateProvider = AutoDisposeProvider<DateTime?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef NextEmiDueDateRef = AutoDisposeProviderRef<DateTime?>;
-String _$loansHash() => r'f8fa0931f5bb9e6fdb4ccd3625f0366cc501e1fd';
+String _$loansHash() => r'8064d93a4a96c0b3cbdc601f53d5d50886eebbd8';
 
 /// See also [Loans].
 @ProviderFor(Loans)

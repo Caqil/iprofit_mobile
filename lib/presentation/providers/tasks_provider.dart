@@ -111,42 +111,55 @@ class TasksState {
   bool get hasStatistics => statistics != null;
   bool get hasProgress => progress != null;
 
-  // Task categories
-  List<TaskModel> get availableTasks =>
-      tasks.where((t) => t.status == 'active' && !t.isCompleted).toList();
+  // Task categories - FIXED: Using correct properties from TaskModel
+  List<TaskModel> get availableTasks => tasks
+      .where((t) => t.userStatus.canSubmit && !t.userStatus.hasSubmitted)
+      .toList();
+
   List<TaskModel> get completedTasks =>
-      tasks.where((t) => t.isCompleted).toList();
+      tasks.where((t) => t.userStatus.hasSubmitted).toList();
+
   List<TaskModel> get highRewardTasks =>
       tasks.where((t) => t.rewardAmount >= 10.0).toList();
+
   List<TaskModel> get easyTasks =>
       tasks.where((t) => t.difficulty == 'easy').toList();
+
   List<TaskModel> get mediumTasks =>
       tasks.where((t) => t.difficulty == 'medium').toList();
+
   List<TaskModel> get hardTasks =>
       tasks.where((t) => t.difficulty == 'hard').toList();
 
   // Submission categories
   List<TaskSubmissionResponse> get pendingSubmissions =>
       submissions.where((s) => s.status == 'pending').toList();
+
   List<TaskSubmissionResponse> get approvedSubmissions =>
       submissions.where((s) => s.status == 'approved').toList();
+
   List<TaskSubmissionResponse> get rejectedSubmissions =>
       submissions.where((s) => s.status == 'rejected').toList();
 
   // Statistics
   int get totalTasksCompleted => completedTasks.length;
+
   double get totalEarned =>
-      approvedSubmissions.fold(0.0, (sum, s) => sum + s.rewardAmount);
+      approvedSubmissions.fold(0.0, (sum, s) => sum + (s.rewardAmount ?? 0.0));
+
   double get potentialEarnings =>
       availableTasks.fold(0.0, (sum, t) => sum + t.rewardAmount);
+
   int get tasksInProgress => pendingSubmissions.length;
 
   // Progress metrics
   double get completionRate =>
       hasTasks ? (completedTasks.length / tasks.length) * 100 : 0.0;
+
   double get approvalRate => hasSubmissions
       ? (approvedSubmissions.length / submissions.length) * 100
       : 0.0;
+
   double get averageReward => approvedSubmissions.isNotEmpty
       ? totalEarned / approvedSubmissions.length
       : 0.0;
@@ -235,7 +248,7 @@ class Tasks extends _$Tasks {
       } else {
         state = state.copyWith(
           isLoadingTasks: false,
-          error: response.message ?? 'Failed to load tasks',
+          error: response.data.toString(),
         );
       }
     } catch (e) {
@@ -362,7 +375,7 @@ class Tasks extends _$Tasks {
       } else {
         state = state.copyWith(
           isLoadingSubmissions: false,
-          error: response.message ?? 'Failed to load submissions',
+          error: response.data.toString(),
         );
       }
     } catch (e) {
@@ -399,7 +412,7 @@ class Tasks extends _$Tasks {
     );
   }
 
-  /// Submit task
+  /// Submit task - FIXED: Using correct TaskSubmission structure and repository call
   Future<bool> submitTask({
     required String taskId,
     required String content,
@@ -410,14 +423,43 @@ class Tasks extends _$Tasks {
       state = state.copyWith(isSubmitting: true, error: null);
 
       final tasksRepository = ref.read(tasksRepositoryProvider);
-      final submission = TaskSubmissionRequest(
+
+      // Create proof items from attachments/content
+      final proofItems = <ProofItem>[];
+
+      // Add content as text proof
+      if (content.isNotEmpty) {
+        proofItems.add(
+          ProofItem(
+            type: 'text',
+            url: '', // Not applicable for text proof
+            description: content,
+          ),
+        );
+      }
+
+      // Add attachments as file proofs
+      if (attachments != null) {
+        for (final attachment in attachments) {
+          proofItems.add(
+            ProofItem(type: 'file', url: attachment, description: 'Attachment'),
+          );
+        }
+      }
+
+      // Create TaskSubmission with correct structure
+      final submission = TaskSubmission(
         taskId: taskId,
-        content: content,
-        attachments: attachments ?? [],
-        additionalData: additionalData,
+        proof: proofItems,
+        completionNotes: content,
+        completedAt: DateTime.now(),
       );
 
-      final response = await tasksRepository.submitTask(submission);
+      // Call repository with both taskId and submission parameters
+      final response = await tasksRepository.submitTask(
+        taskId: taskId,
+        submission: submission,
+      );
 
       if (response.success) {
         state = state.copyWith(isSubmitting: false);
@@ -467,7 +509,6 @@ class Tasks extends _$Tasks {
     try {
       final tasksRepository = ref.read(tasksRepositoryProvider);
       final response = await tasksRepository.getTaskStatistics(
-        timeframe: timeframe,
         forceRefresh: forceRefresh,
       );
 
@@ -568,10 +609,10 @@ class Tasks extends _$Tasks {
     }
   }
 
-  /// Check if task is completed
+  /// Check if task is completed - FIXED: Using correct property path
   bool isTaskCompleted(String taskId) {
     final task = getTaskById(taskId);
-    return task?.isCompleted ?? false;
+    return task?.userStatus.hasSubmitted ?? false;
   }
 
   /// Check if task has pending submission
@@ -584,7 +625,7 @@ class Tasks extends _$Tasks {
     return state.tasks.where((t) => t.category == category).toList();
   }
 
-  /// Get earnings chart data
+  /// Get earnings chart data - FIXED: Using correct property
   List<Map<String, dynamic>> getEarningsChartData({
     String timeframe = '30d',
     int maxPoints = 30,
@@ -593,8 +634,10 @@ class Tasks extends _$Tasks {
         .take(maxPoints)
         .map(
           (s) => {
-            'date': s.approvedAt?.toIso8601String().split('T')[0] ?? '',
-            'amount': s.rewardAmount,
+            'date':
+                s.reviewedAt?.toIso8601String().split('T')[0] ??
+                s.submittedAt.toIso8601String().split('T')[0],
+            'amount': s.rewardAmount ?? 0.0,
           },
         )
         .toList();

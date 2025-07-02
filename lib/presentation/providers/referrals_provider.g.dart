@@ -203,7 +203,7 @@ final referralConversionRateProvider = AutoDisposeProvider<double>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ReferralConversionRateRef = AutoDisposeProviderRef<double>;
-String _$referralsHash() => r'9534ba2b64a82c2ab9b85f0737075f21cadf3088';
+String _$referralsHash() => r'cfd745b28df41ff059772a3ad16be3cc607026b8';
 
 /// See also [Referrals].
 @ProviderFor(Referrals)

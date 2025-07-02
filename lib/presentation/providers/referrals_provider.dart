@@ -413,13 +413,12 @@ class Referrals extends _$Referrals {
   }) async {
     try {
       final referralsRepository = ref.read(referralsRepositoryProvider);
-      final response = await referralsRepository.getReferralStatistics(
-        timeframe: timeframe,
+      final response = await referralsRepository.getReferralStats(
         forceRefresh: forceRefresh,
       );
 
       if (response.success && response.data != null) {
-        state = state.copyWith(statistics: response.data!);
+        state = state.copyWith(statistics: response.data!.toJson());
       }
     } catch (e) {
       // Silent fail for statistics
@@ -428,55 +427,6 @@ class Referrals extends _$Referrals {
 
   // ===== REFERRAL ACTIONS =====
 
-  /// Withdraw referral earnings
-  Future<bool> withdrawEarnings({
-    required double amount,
-    required String paymentMethod,
-    String? notes,
-  }) async {
-    try {
-      final referralsRepository = ref.read(referralsRepositoryProvider);
-      final response = await referralsRepository.withdrawEarnings(
-        amount: amount,
-        paymentMethod: paymentMethod,
-        notes: notes,
-      );
-
-      if (response.success) {
-        // Refresh overview and earnings
-        await Future.wait([refreshOverview(), refreshEarnings()]);
-        return true;
-      } else {
-        state = state.copyWith(
-          error: response.message ?? 'Failed to withdraw earnings',
-        );
-        return false;
-      }
-    } catch (e) {
-      state = state.copyWith(error: _getErrorMessage(e));
-      return false;
-    }
-  }
-
-  /// Get referral details
-  Future<ReferralModel?> getReferralDetails(String referralId) async {
-    try {
-      final referralsRepository = ref.read(referralsRepositoryProvider);
-      final response = await referralsRepository.getReferralDetails(referralId);
-
-      if (response.success && response.data != null) {
-        return response.data!;
-      } else {
-        throw AppException.serverError(
-          response.message ?? 'Failed to load referral details',
-        );
-      }
-    } catch (e) {
-      throw AppException.fromException(e as Exception);
-    }
-  }
-
-  // ===== UTILITY METHODS =====
 
   /// Clear error state
   void clearError() {
