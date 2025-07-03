@@ -157,7 +157,7 @@ class AppStateNotifier extends _$AppStateNotifier {
       await _initializeNotifications();
 
       // Set up listeners
-     // _setupListeners();
+      // _setupListeners();
 
       // Start background sync
       _startBackgroundSync();
@@ -414,7 +414,7 @@ class AppStateNotifier extends _$AppStateNotifier {
 
       // Perform specific sync operations
       await _syncUserData();
-     // await _syncNotifications();
+      // await _syncNotifications();
     } catch (e) {
       // Silent fail for background sync
     }

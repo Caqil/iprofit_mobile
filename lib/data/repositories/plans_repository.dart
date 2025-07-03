@@ -1,7 +1,8 @@
 // ============================================================================
-// lib/data/repositories/plans_repository.dart
+// lib/data/repositories/plans_repository.dart - FIXED VERSION
 // ============================================================================
 
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iprofit_mobile/data/models/plans/plan_model.dart';
 import '../../core/constants/api_constants.dart';
@@ -17,9 +18,7 @@ final plansRepositoryProvider = Provider<PlansRepository>((ref) {
 class PlansRepository {
   final ApiClient _apiClient;
   static const String _cacheKeyPlans = 'available_plans';
-  static const Duration _cacheExpiry = Duration(
-    hours: 6,
-  ); // Plans don't change often
+  static const Duration _cacheExpiry = Duration(hours: 6);
 
   PlansRepository(this._apiClient);
 
@@ -33,6 +32,7 @@ class PlansRepository {
       if (!forceRefresh) {
         final cached = await _getCachedPlans();
         if (cached != null && cached.isNotEmpty) {
+          print('✅ Plans loaded from cache: ${cached.length} plans');
           return ApiResponse<List<PlanModel>>(
             success: true,
             data: cached,
@@ -47,27 +47,79 @@ class PlansRepository {
         queryParams['active'] = 'true';
       }
 
+      print('🌐 Fetching plans from API: ${ApiConstants.plans}');
+      print('📋 Query params: $queryParams');
+
       final response = await _apiClient.get<Map<String, dynamic>>(
         ApiConstants.plans,
         queryParameters: queryParams,
       );
 
+      print('📡 Response status: ${response.statusCode}');
+      print('📄 Response data type: ${response.data.runtimeType}');
+
       if (response.statusCode == ApiConstants.statusOk) {
         final responseData = response.data!;
+        print('🔍 Full response structure: ${responseData.keys}');
 
-        // Handle nested response structure: data.data contains the plans array
-        final plansData = responseData['data']?['data'] as List?;
+        // Handle multiple possible response structures
+        List<dynamic>? plansData;
 
-        if (plansData == null) {
-          throw AppException.parseError('Invalid plans response structure');
+        // Try nested structure first: data.data
+        if (responseData['data'] is Map<String, dynamic>) {
+          final dataMap = responseData['data'] as Map<String, dynamic>;
+          if (dataMap['data'] is List) {
+            plansData = dataMap['data'] as List;
+            print('✅ Found plans in nested structure: data.data');
+          }
         }
 
-        final plans = plansData
-            .map((item) => PlanModel.fromJson(item as Map<String, dynamic>))
-            .toList();
+        // Try direct data structure: data
+        if (plansData == null && responseData['data'] is List) {
+          plansData = responseData['data'] as List;
+          print('✅ Found plans in direct structure: data');
+        }
+
+        // Try root level structure (direct array)
+        if (plansData == null && responseData is List) {
+          plansData = responseData as List<dynamic>;
+          print('✅ Found plans in root level structure');
+        }
+
+        if (plansData == null) {
+          print('❌ Could not find plans array in response');
+          print('📄 Available keys: ${responseData.keys}');
+          throw AppException.parseError(
+            'Invalid plans response structure: no plans array found',
+          );
+        }
+
+        print('📊 Converting ${plansData.length} plans from JSON');
+
+        final plans = <PlanModel>[];
+        for (int i = 0; i < plansData.length; i++) {
+          try {
+            final item = plansData[i];
+            if (item is Map<String, dynamic>) {
+              final plan = PlanModel.fromJson(item);
+              plans.add(plan);
+            } else {
+              print('⚠️ Skipping plan at index $i: not a Map<String, dynamic>');
+            }
+          } catch (e) {
+            print('⚠️ Error parsing plan at index $i: $e');
+            // Continue with other plans instead of failing entirely
+          }
+        }
+
+        if (plans.isEmpty) {
+          print('❌ No valid plans found after parsing');
+          throw AppException.parseError('No valid plans found in response');
+        }
 
         // Sort plans by priority
         plans.sort((a, b) => a.priority.compareTo(b.priority));
+        print('✅ Successfully parsed ${plans.length} plans');
 
         // Cache the result
         await _cachePlans(plans);
@@ -80,9 +132,22 @@ class PlansRepository {
         );
       }
 
-      throw AppException.serverError('Failed to fetch plans');
+      throw AppException.serverError(
+        'Failed to fetch plans: ${response.statusCode}',
+      );
     } catch (e) {
+      print('❌ Error in getPlans: $e');
+      print('📍 Error type: ${e.runtimeType}');
+
       if (e is AppException) rethrow;
+
+      // Handle specific Dio errors
+      if (e.toString().contains('Instance of \'Future\'')) {
+        throw AppException.parseError(
+          'Async operation error. Please try again.',
+        );
+      }
+
       throw AppException.fromException(e as Exception);
     }
   }
@@ -90,21 +155,31 @@ class PlansRepository {
   /// Get plan details by ID
   Future<ApiResponse<PlanModel>> getPlanDetails(String planId) async {
     try {
+      print('🔍 Fetching plan details for ID: $planId');
+
       final response = await _apiClient.get<Map<String, dynamic>>(
         '${ApiConstants.plans}/$planId',
       );
 
       if (response.statusCode == ApiConstants.statusOk) {
         final responseData = response.data!;
+        print('📄 Plan details response keys: ${responseData.keys}');
 
         // Handle nested response structure
-        final planData = responseData['data'];
+        Map<String, dynamic>? planData;
+
+        if (responseData['data'] is Map<String, dynamic>) {
+          planData = responseData['data'] as Map<String, dynamic>;
+        } else {
+          planData = responseData;
+        }
 
         if (planData == null) {
           throw AppException.parseError('Invalid plan response structure');
         }
 
-        final plan = PlanModel.fromJson(planData as Map<String, dynamic>);
+        final plan = PlanModel.fromJson(planData);
+        print('✅ Successfully parsed plan details: ${plan.name}');
 
         return ApiResponse<PlanModel>(
           success: true,
@@ -114,14 +189,18 @@ class PlansRepository {
         );
       }
 
-      throw AppException.serverError('Failed to fetch plan details');
+      throw AppException.serverError(
+        'Failed to fetch plan details: ${response.statusCode}',
+      );
     } catch (e) {
+      print('❌ Error in getPlanDetails: $e');
+
       if (e is AppException) rethrow;
       throw AppException.fromException(e as Exception);
     }
   }
 
-  /// Get plans suitable for registration (usually includes free plans)
+  /// Get plans suitable for registration
   Future<ApiResponse<List<PlanModel>>> getRegistrationPlans({
     bool forceRefresh = false,
   }) async {
@@ -144,6 +223,8 @@ class PlansRepository {
           return a.priority.compareTo(b.priority);
         });
 
+        print('📋 Registration plans: ${registrationPlans.length} available');
+
         return ApiResponse<List<PlanModel>>(
           success: true,
           data: registrationPlans,
@@ -154,12 +235,14 @@ class PlansRepository {
 
       return plansResponse;
     } catch (e) {
+      print('❌ Error in getRegistrationPlans: $e');
+
       if (e is AppException) rethrow;
       throw AppException.fromException(e as Exception);
     }
   }
 
-  /// Get default plan (the plan marked as isDefault or first free plan)
+  /// Get default plan
   Future<ApiResponse<PlanModel?>> getDefaultPlan() async {
     try {
       final plansResponse = await getRegistrationPlans();
@@ -170,6 +253,7 @@ class PlansRepository {
         // Find default plan
         final defaultPlan = plans.where((plan) => plan.isDefault).firstOrNull;
         if (defaultPlan != null) {
+          print('✅ Found default plan: ${defaultPlan.name}');
           return ApiResponse<PlanModel?>(
             success: true,
             data: defaultPlan,
@@ -181,6 +265,7 @@ class PlansRepository {
         // Find first free plan
         final freePlan = plans.where((plan) => plan.isFree).firstOrNull;
         if (freePlan != null) {
+          print('✅ Found free plan as default: ${freePlan.name}');
           return ApiResponse<PlanModel?>(
             success: true,
             data: freePlan,
@@ -189,8 +274,9 @@ class PlansRepository {
           );
         }
 
-        // If no free plan, get the first plan (lowest priority)
+        // If no free plan, get the first plan
         if (plans.isNotEmpty) {
+          print('✅ Using first available plan as default: ${plans.first.name}');
           return ApiResponse<PlanModel?>(
             success: true,
             data: plans.first,
@@ -200,6 +286,7 @@ class PlansRepository {
         }
       }
 
+      print('⚠️ No default plan available');
       return ApiResponse<PlanModel?>(
         success: true,
         data: null,
@@ -207,6 +294,8 @@ class PlansRepository {
         timestamp: DateTime.now(),
       );
     } catch (e) {
+      print('❌ Error in getDefaultPlan: $e');
+
       if (e is AppException) rethrow;
       throw AppException.fromException(e as Exception);
     }
@@ -218,16 +307,19 @@ class PlansRepository {
   }) async {
     try {
       if (planIds == null || planIds.isEmpty) {
-        // Get all active plans for comparison
         return await getPlans(activeOnly: true);
       }
 
-      // Get specific plans
       final List<PlanModel> plans = [];
       for (final planId in planIds) {
-        final planResponse = await getPlanDetails(planId);
-        if (planResponse.success && planResponse.data != null) {
-          plans.add(planResponse.data!);
+        try {
+          final planResponse = await getPlanDetails(planId);
+          if (planResponse.success && planResponse.data != null) {
+            plans.add(planResponse.data!);
+          }
+        } catch (e) {
+          print('⚠️ Failed to fetch plan $planId: $e');
+          // Continue with other plans
         }
       }
 
@@ -238,14 +330,16 @@ class PlansRepository {
         timestamp: DateTime.now(),
       );
     } catch (e) {
+      print('❌ Error in getComparisonPlans: $e');
+
       if (e is AppException) rethrow;
       throw AppException.fromException(e as Exception);
     }
   }
 
-  // ===== CACHE METHODS =====
+  // ===== FIXED CACHE METHODS =====
 
-  /// Cache plans to local storage
+  /// Cache plans to local storage - FIXED
   Future<void> _cachePlans(List<PlanModel> plans) async {
     try {
       final cacheData = {
@@ -253,37 +347,56 @@ class PlansRepository {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
-      await StorageService.setString(_cacheKeyPlans, cacheData.toString());
+      // Properly encode as JSON string
+      final cacheString = jsonEncode(cacheData);
+      await StorageService.setString(_cacheKeyPlans, cacheString);
+
+      print('💾 Cached ${plans.length} plans');
     } catch (e) {
+      print('⚠️ Cache save failed: $e');
       // Silent fail for cache operations
     }
   }
 
-  /// Get cached plans
+  /// Get cached plans - FIXED
   Future<List<PlanModel>?> _getCachedPlans() async {
     try {
       final cachedString = await StorageService.getString(_cacheKeyPlans);
-      if (cachedString == null) return null;
+      if (cachedString == null || cachedString.isEmpty) {
+        print('📭 No cached plans found');
+        return null;
+      }
 
-      final cacheData = cachedString as Map<String, dynamic>?;
-      if (cacheData == null) return null;
+      // Properly decode JSON string
+      final Map<String, dynamic> cacheData = jsonDecode(cachedString);
 
       final timestamp = cacheData['timestamp'] as int?;
-      if (timestamp == null) return null;
+      if (timestamp == null) {
+        print('⚠️ Cache missing timestamp');
+        return null;
+      }
 
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
       if (DateTime.now().difference(cacheTime) > _cacheExpiry) {
-        return null; // Cache expired
+        print('⏰ Cache expired');
+        return null;
       }
 
       final plansJson = cacheData['plans'] as List?;
-      if (plansJson == null) return null;
+      if (plansJson == null) {
+        print('⚠️ Cache missing plans data');
+        return null;
+      }
 
-      return plansJson
+      final plans = plansJson
           .map((item) => PlanModel.fromJson(item as Map<String, dynamic>))
           .toList();
+
+      print('📁 Loaded ${plans.length} plans from cache');
+      return plans;
     } catch (e) {
-      return null; // Return null on any cache error
+      print('⚠️ Cache load failed: $e');
+      return null;
     }
   }
 
@@ -291,8 +404,9 @@ class PlansRepository {
   Future<void> clearCache() async {
     try {
       await StorageService.removeCachedData(_cacheKeyPlans);
+      print('🗑️ Plans cache cleared');
     } catch (e) {
-      // Silent fail for cache operations
+      print('⚠️ Cache clear failed: $e');
     }
   }
 }

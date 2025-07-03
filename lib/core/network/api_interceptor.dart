@@ -1,3 +1,7 @@
+// ============================================================================
+// lib/core/network/api_interceptor.dart - FIXED VERSION
+// ============================================================================
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
@@ -9,7 +13,7 @@ import '../constants/api_constants.dart';
 import '../../data/services/storage_service.dart';
 import '../../data/services/device_service.dart';
 
-/// API Interceptor for handling authentication, headers, and request/response processing
+/// Fixed API Interceptor with proper async error handling
 class ApiInterceptor extends Interceptor {
   final ErrorHandler _errorHandler = ErrorHandler();
 
@@ -35,11 +39,17 @@ class ApiInterceptor extends Interceptor {
 
       super.onRequest(options, handler);
     } catch (e) {
-      final error = _errorHandler.handleError(e);
+      print('❌ Request interceptor error: $e');
+
+      // Handle error synchronously for request interceptor
+      final appException = e is AppException
+          ? e
+          : AppException.fromException(e as Exception);
+
       handler.reject(
         DioException(
           requestOptions: options,
-          error: error,
+          error: appException,
           type: DioExceptionType.unknown,
         ),
       );
@@ -56,6 +66,7 @@ class ApiInterceptor extends Interceptor {
 
       // Validate response structure
       if (!_isValidResponse(response)) {
+        print('❌ Invalid response structure');
         handler.reject(
           DioException(
             requestOptions: response.requestOptions,
@@ -69,12 +80,17 @@ class ApiInterceptor extends Interceptor {
 
       super.onResponse(response, handler);
     } catch (e) {
-      final error = _errorHandler.handleError(e);
+      print('❌ Response interceptor error: $e');
+
+      final appException = e is AppException
+          ? e
+          : AppException.fromException(e as Exception);
+
       handler.reject(
         DioException(
           requestOptions: response.requestOptions,
           response: response,
-          error: error,
+          error: appException,
           type: DioExceptionType.unknown,
         ),
       );
@@ -84,6 +100,10 @@ class ApiInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     try {
+      print('🚨 Interceptor handling error: ${err.type}');
+      print('🔍 Error message: ${err.message}');
+      print('🔍 Response status: ${err.response?.statusCode}');
+
       // Log error if debugging is enabled
       if (AppConfig.enableDebugLogging) {
         _logError(err);
@@ -92,32 +112,57 @@ class ApiInterceptor extends Interceptor {
       // Handle token refresh for 401 errors
       if (err.response?.statusCode == 401 &&
           !err.requestOptions.path.contains('/auth/')) {
+        print('🔄 Attempting token refresh...');
         final refreshed = await _handleTokenRefresh(err.requestOptions);
         if (refreshed) {
+          print('✅ Token refreshed, retrying request...');
           // Retry the original request with new token
           final response = await _retry(err.requestOptions);
           handler.resolve(response);
           return;
         }
+        print('❌ Token refresh failed');
       }
 
-      // Convert DioException to AppException
-      final appException = _errorHandler.handleError(err);
+      // ✅ FIXED: Properly await the error handler and extract AppException
+      print('🔧 Processing error with error handler...');
+      final errorHandlerResult = await _errorHandler.handleError(err);
+      final appException = errorHandlerResult.exception;
 
-      // Create new DioException with AppException
+      print('✅ Error processed: ${appException.runtimeType}');
+      print('📄 User message: ${errorHandlerResult.userMessage}');
+
+      // Create new DioException with proper AppException
       final newError = DioException(
         requestOptions: err.requestOptions,
         response: err.response,
         error: appException,
         type: err.type,
         stackTrace: err.stackTrace,
-        message: appException.toString(),
+        message:
+            errorHandlerResult.userMessage, // Use the user-friendly message
       );
 
       super.onError(newError, handler);
     } catch (e) {
-      // If error handling fails, pass through original error
-      super.onError(err, handler);
+      print('❌ Error handler failed: $e');
+      print('📍 Error type: ${e.runtimeType}');
+
+      // If error handling fails, create a simple AppException
+      final fallbackException = AppException.unknown(
+        'Request failed: ${e.toString().replaceAll('Instance of \'Future', 'Processing error')}',
+      );
+
+      final fallbackError = DioException(
+        requestOptions: err.requestOptions,
+        response: err.response,
+        error: fallbackException,
+        type: DioExceptionType.unknown,
+        stackTrace: err.stackTrace,
+        message: fallbackException.userMessage,
+      );
+
+      super.onError(fallbackError, handler);
     }
   }
 
@@ -155,6 +200,11 @@ class ApiInterceptor extends Interceptor {
       if (fingerprint.isNotEmpty) {
         options.headers[ApiConstants.fingerprintHeader] = fingerprint;
       }
+
+      // Add ngrok headers for development
+      if (options.baseUrl.contains('ngrok')) {
+        options.headers['ngrok-skip-browser-warning'] = 'true';
+      }
     } catch (e) {
       // Log error but don't fail the request
       if (AppConfig.enableDebugLogging) {
@@ -166,9 +216,11 @@ class ApiInterceptor extends Interceptor {
   /// Add common headers to all requests
   void _addCommonHeaders(RequestOptions options) {
     options.headers.addAll({
-      ApiConstants.userAgentHeader: AppConfig.userAgent,
-      ApiConstants.contentType: ApiConstants.contentType,
-      ApiConstants.accept: ApiConstants.accept,
+      // ✅ FIXED: Use proper header names, not values as names
+      'User-Agent': AppConfig.userAgent,
+      'Content-Type':
+          ApiConstants.contentType, // 'Content-Type': 'application/json'
+      'Accept': ApiConstants.accept, // 'Accept': 'application/json'
       'X-App-Version': AppConfig.appVersion,
       'X-Platform': AppConfig.currentConfig.name,
       'X-Request-ID': _generateRequestId(),

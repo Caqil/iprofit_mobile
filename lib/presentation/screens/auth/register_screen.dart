@@ -28,11 +28,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _step1FormKey = GlobalKey<ShadFormState>();
   final _step2FormKey = GlobalKey<ShadFormState>();
   final _step3FormKey = GlobalKey<ShadFormState>();
+  final _step4FormKey = GlobalKey<ShadFormState>();
 
   // Controllers for all form fields
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _dateOfBirthController = TextEditingController();
+
+  // Address controllers
+  final _streetController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _countryController = TextEditingController();
+  final _zipCodeController = TextEditingController();
+
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _referralCodeController = TextEditingController();
@@ -45,35 +55,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _acceptPrivacy = false;
   String? _deviceId;
   String? _selectedPlan;
+  DateTime? _selectedDate;
 
   // Step configuration
-  final List<StepInfo> _steps = [
-    StepInfo(
-      title: 'Basic Information',
-      description: 'Enter your personal details',
-      icon: LucideIcons.user,
-    ),
-    StepInfo(
-      title: 'Security',
-      description: 'Create a secure password',
-      icon: LucideIcons.lock,
-    ),
-    StepInfo(
-      title: 'Investment',
-      description: 'Choose your plan',
-      icon: LucideIcons.trendingUp,
-    ),
-    StepInfo(
-      title: 'Confirmation',
-      description: 'Review and confirm',
-      icon: LucideIcons.circleCheck,
-    ),
+  final List<String> _stepTitles = [
+    'Personal Info',
+    'Address',
+    'Security',
+    'Investment',
+    'Confirm',
   ];
 
   @override
   void initState() {
     super.initState();
     _initializeDeviceId();
+
     // Initialize plans after the widget tree is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializePlans();
@@ -85,32 +82,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _dateOfBirthController.dispose();
+    _streetController.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _countryController.dispose();
+    _zipCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _referralCodeController.dispose();
     super.dispose();
   }
 
-  /// Initialize plans from API (called after widget tree is built)
+  /// Initialize plans from API
   Future<void> _initializePlans() async {
     try {
-      // Use Future.microtask to ensure we're outside the build phase
       await Future.microtask(() async {
         await ref.read(plansProvider.notifier).initialize();
       });
 
-      // Set default selected plan
       if (mounted) {
         final plansState = ref.read(plansProvider);
         if (plansState.hasSelectedPlan) {
           setState(() => _selectedPlan = plansState.selectedPlan!.id);
         } else if (plansState.hasPlans) {
-          // If no selected plan but has plans, select first one
           setState(() => _selectedPlan = plansState.plans.first.id);
         }
       }
     } catch (e) {
-      // Don't show error dialog immediately - let user proceed without plans
       debugPrint('Plans initialization failed: $e');
     }
   }
@@ -118,14 +117,50 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _initializeDeviceId() async {
     try {
       final deviceId = await DeviceService.getDeviceId();
-      setState(() => _deviceId = deviceId);
+      if (mounted) {
+        setState(() => _deviceId = deviceId);
+      }
     } catch (e) {
       if (mounted) {
-        await showErrorDialog(
-          context,
-          title: 'Device Error',
-          message: 'Unable to identify device. Please restart the app.',
-        );
+        _showSnackBar('Device error: Unable to identify device', isError: true);
+      }
+    }
+  }
+
+  /// Show date picker for date of birth
+  Future<void> _selectDateOfBirth() async {
+    try {
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDate ?? DateTime(2000),
+        firstDate: DateTime(1940),
+        lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+        helpText: 'Select Date of Birth',
+        builder: (context, child) {
+          return Theme(
+            data: ThemeData.dark().copyWith(
+              colorScheme: const ColorScheme.dark(
+                primary: Colors.blue,
+                onPrimary: Colors.white,
+                surface: Color(0xFF2A2A2A),
+                onSurface: Colors.white,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+
+      if (picked != null && mounted) {
+        setState(() {
+          _selectedDate = picked;
+          _dateOfBirthController.text =
+              '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Error selecting date', isError: true);
       }
     }
   }
@@ -137,31 +172,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     switch (_currentStep) {
       case 0:
         isValid = _step1FormKey.currentState?.validate() ?? false;
-        break;
-      case 1:
-        isValid = _step2FormKey.currentState?.validate() ?? false;
-        if (isValid &&
-            _passwordController.text != _confirmPasswordController.text) {
-          await showErrorDialog(
-            context,
-            title: 'Password Mismatch',
-            message: 'Passwords do not match. Please check and try again.',
-          );
+        if (isValid && _selectedDate == null) {
+          _showSnackBar('Please select your date of birth', isError: true);
           isValid = false;
         }
         break;
+      case 1:
+        isValid = _step2FormKey.currentState?.validate() ?? false;
+        break;
       case 2:
         isValid = _step3FormKey.currentState?.validate() ?? false;
+        if (isValid &&
+            _passwordController.text != _confirmPasswordController.text) {
+          _showSnackBar('Passwords do not match', isError: true);
+          isValid = false;
+        }
         break;
       case 3:
-        // Final step - submit registration
+        isValid = _step4FormKey.currentState?.validate() ?? false;
+        break;
+      case 4:
         await _handleRegister();
         return;
     }
 
     if (isValid) {
       setState(() {
-        _currentStep = (_currentStep + 1).clamp(0, _steps.length - 1);
+        _currentStep = (_currentStep + 1).clamp(0, _stepTitles.length - 1);
       });
     }
   }
@@ -175,20 +212,49 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  /// Handle registration with real API integration
-  Future<void> _handleRegister() async {
-    if (_deviceId == null) return;
+  /// Show snackbar message
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
 
-    // Validate terms acceptance
-    if (!_acceptTerms || !_acceptPrivacy) {
-      await showErrorDialog(
-        context,
-        title: 'Terms Required',
-        message:
-            'Please accept both Terms of Service and Privacy Policy to continue.',
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red[600] : Colors.green[600],
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: Duration(seconds: isError ? 4 : 2),
+      ),
+    );
+  }
+
+  /// Handle registration with API integration
+  Future<void> _handleRegister() async {
+    if (_deviceId == null) {
+      _showSnackBar('Device ID not available', isError: true);
       return;
     }
+
+    if (!_acceptTerms || !_acceptPrivacy) {
+      _showSnackBar('Please accept Terms and Privacy Policy', isError: true);
+      return;
+    }
+
+    if (_selectedDate == null) {
+      _showSnackBar('Please select your date of birth', isError: true);
+      return;
+    }
+
+    final formattedDateOfBirth =
+        '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
+
+    final address = {
+      'street': _streetController.text.trim(),
+      'city': _cityController.text.trim(),
+      'state': _stateController.text.trim(),
+      'country': _countryController.text.trim(),
+      'zipCode': _zipCodeController.text.trim(),
+    };
 
     final success = await ref
         .read(authProvider.notifier)
@@ -196,202 +262,145 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           phone: _phoneController.text.trim(),
+          dateOfBirth: formattedDateOfBirth,
+          address: address,
           password: _passwordController.text,
           confirmPassword: _confirmPasswordController.text,
           deviceId: _deviceId!,
-          planId: _selectedPlan, // Can be null if no plans available
-          referralCode: _referralCodeController.text.trim().isNotEmpty
-              ? _referralCodeController.text.trim()
-              : null,
+          planId: _selectedPlan,
+          referralCode: _referralCodeController.text.trim(),
           acceptTerms: _acceptTerms,
           acceptPrivacy: _acceptPrivacy,
         );
 
     if (success && mounted) {
-      await showSuccessDialog(
-        context,
-        title: 'Registration Successful!',
-        message: 'Welcome to iProfit! Please verify your email to get started.',
-        autoClose: true,
-        autoCloseDuration: const Duration(seconds: 2),
-      );
+      _showSnackBar('Registration successful! Please verify your email.');
 
-      // Navigate to OTP verification with user data
-      if (mounted) {
-        context.push(
-          '${RoutePaths.verifyOtp}?email=${_emailController.text.trim()}&name=${_nameController.text.trim()}',
-        );
-      }
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          context.push(
+            '${RoutePaths.verifyOtp}?email=${_emailController.text.trim()}&name=${_nameController.text.trim()}',
+          );
+        }
+      });
     }
   }
 
   /// Handle social registration
   Future<void> _handleSocialRegister(String provider) async {
-    await showErrorDialog(
-      context,
-      title: 'Coming Soon',
-      message: '$provider registration will be available soon.',
-    );
+    _showSnackBar('$provider registration coming soon');
   }
-
-  /// Get step progress as percentage
-  double get _stepProgress => (_currentStep + 1) / _steps.length;
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // Listen for auth state changes and errors
     ref.listen<AuthenticationState>(authProvider, (previous, current) {
       if (current.hasError && mounted) {
-        showErrorDialog(
-          context,
-          title: 'Registration Failed',
-          message: current.error ?? 'An unexpected error occurred',
-        );
+        _showSnackBar(current.error ?? 'Registration failed', isError: true);
       }
     });
 
     return LoadingOverlay(
       isLoading: authState.isLoading,
-      message: 'Creating your account...',
+      message: 'Creating account...',
       child: Scaffold(
-        backgroundColor: const Color(0xFF1A1A1A),
-        body: SafeArea(
-          child: Column(
-            children: [
-              // Header with progress
-              _buildHeader(),
-
-              // Step content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: AppConstants.paddingHorizontalMD,
-                  child: _buildCurrentStepContent(),
-                ),
+        backgroundColor: const Color(0xFF0F0F0F),
+        appBar: _buildAppBar(),
+        body: Column(
+          children: [
+            _buildProgressIndicator(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: _buildCurrentStepContent(),
               ),
-
-              // Navigation buttons
-              _buildNavigationButtons(authState),
-            ],
-          ),
+            ),
+            _buildBottomNavigation(authState),
+          ],
         ),
       ),
     );
   }
 
-  /// Build header with logo and progress indicator
-  Widget _buildHeader() {
+  /// Build compact app bar
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: const Color(0xFF1A1A1A),
+      elevation: 0,
+      centerTitle: true,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Colors.blue, Colors.cyan]),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              LucideIcons.trendingUp,
+              size: 16,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'iProfit',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => context.push(RoutePaths.login),
+          child: const Text(
+            'Sign In',
+            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build compact progress indicator
+  Widget _buildProgressIndicator() {
     return Container(
-      padding: AppConstants.paddingHorizontalMD,
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        border: Border(bottom: BorderSide(color: Colors.grey[800]!)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1A1A),
+        border: Border(bottom: BorderSide(color: Color(0xFF2A2A2A))),
       ),
       child: Column(
         children: [
-          // Logo
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.green.shade400, Colors.blue.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  LucideIcons.trendingUp,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
               Text(
-                'iProfit',
-                style: ShadTheme.of(context).textTheme.h3.copyWith(
+                'Step ${_currentStep + 1} of ${_stepTitles.length}',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              Text(
+                _stepTitles[_currentStep],
+                style: const TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 24),
-
-          // Progress Indicator
-          Row(
-            children: [
-              Text(
-                'Step ${_currentStep + 1} of ${_steps.length}',
-                style: ShadTheme.of(
-                  context,
-                ).textTheme.small.copyWith(color: Colors.grey[400]),
-              ),
-              const Spacer(),
-              Text(
-                _steps[_currentStep].title,
-                style: ShadTheme.of(
-                  context,
-                ).textTheme.small.copyWith(color: Colors.grey[400]),
-              ),
-            ],
-          ),
-
           const SizedBox(height: 8),
-
-          // Progress Bar
-          Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: _stepProgress,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.blue,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Step icon and description
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _steps[_currentStep].icon,
-                  size: 18,
-                  color: Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _steps[_currentStep].description,
-                  style: ShadTheme.of(
-                    context,
-                  ).textTheme.p.copyWith(color: Colors.grey[300]),
-                ),
-              ),
-            ],
+          LinearProgressIndicator(
+            value: (_currentStep + 1) / _stepTitles.length,
+            backgroundColor: Colors.grey[800],
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+            minHeight: 3,
           ),
         ],
       ),
@@ -402,727 +411,612 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget _buildCurrentStepContent() {
     switch (_currentStep) {
       case 0:
-        return _buildStep1BasicInfo();
+        return _buildStep1PersonalInfo();
       case 1:
-        return _buildStep2Security();
+        return _buildStep2Address();
       case 2:
-        return _buildStep3Investment();
+        return _buildStep3Security();
       case 3:
-        return _buildStep4Confirmation();
+        return _buildStep4Investment();
+      case 4:
+        return _buildStep5Confirmation();
       default:
         return Container();
     }
   }
 
-  /// Step 1: Basic Information
-  Widget _buildStep1BasicInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-
-        Text(
-          'Basic Information',
-          style: ShadTheme.of(context).textTheme.h2.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+  /// Compact input field widget
+  Widget _buildCompactTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    String? Function(String?)? validator,
+    bool obscureText = false,
+    Widget? trailing,
+    VoidCallback? onTap,
+    bool readOnly = false,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Let\'s start with your basic details',
-          style: ShadTheme.of(
-            context,
-          ).textTheme.p.copyWith(color: Colors.grey[400]),
-        ),
-
-        const SizedBox(height: 32),
-
-        ShadForm(
-          key: _step1FormKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Full Name Field
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Full Name',
-                    style: ShadTheme.of(context).textTheme.p.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ShadInputFormField(
-                    controller: _nameController,
-                    placeholder: const Text('Enter your full name'),
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) =>
-                        Validators.validateRequired(value, 'Full name'),
-                    leading: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        LucideIcons.user,
-                        size: 18,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: ShadDecoration(
-                      border: ShadBorder.all(color: Colors.grey[700]!),
-                    ),
-                  ),
-                ],
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: onTap,
+            child: ShadInputFormField(
+              controller: controller,
+              placeholder: Text(
+                hint,
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
               ),
-
-              const SizedBox(height: 20),
-
-              // Email Field
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Email Address',
-                    style: ShadTheme.of(context).textTheme.p.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ShadInputFormField(
-                    controller: _emailController,
-                    placeholder: const Text('Enter your email address'),
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    validator: Validators.validateEmail,
-                    leading: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        LucideIcons.mail,
-                        size: 18,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: ShadDecoration(
-                      border: ShadBorder.all(color: Colors.grey[700]!),
-                    ),
-                  ),
-                ],
+              keyboardType: keyboardType,
+              textInputAction: textInputAction,
+              validator: validator,
+              obscureText: obscureText,
+              readOnly: readOnly,
+              textCapitalization: textCapitalization,
+              leading: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(icon, size: 18, color: Colors.blue),
               ),
-
-              const SizedBox(height: 20),
-
-              // Phone Field
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Phone Number',
-                    style: ShadTheme.of(context).textTheme.p.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ShadInputFormField(
-                    controller: _phoneController,
-                    placeholder: const Text('Enter your phone number'),
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.done,
-                    validator: Validators.validatePhoneNumber,
-                    leading: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        LucideIcons.phone,
-                        size: 18,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: ShadDecoration(
-                      border: ShadBorder.all(color: Colors.grey[700]!),
-                    ),
-                  ),
-                ],
+              trailing: trailing,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: ShadDecoration(
+                border: ShadBorder.all(color: Colors.grey[700]!),
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  /// Step 2: Security (Password)
-  Widget _buildStep2Security() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-
-        Text(
-          'Security',
-          style: ShadTheme.of(context).textTheme.h2.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+  /// Step 1: Personal Information
+  Widget _buildStep1PersonalInfo() {
+    return ShadForm(
+      key: _step1FormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Personal Information',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Create a strong password to secure your account',
-          style: ShadTheme.of(
-            context,
-          ).textTheme.p.copyWith(color: Colors.grey[400]),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            'Let\'s start with your basic details',
+            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 24),
 
-        const SizedBox(height: 32),
+          _buildCompactTextField(
+            controller: _nameController,
+            label: 'Full Name',
+            hint: 'Enter your full name',
+            icon: LucideIcons.user,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            validator: (value) =>
+                Validators.validateRequired(value, 'Full name'),
+          ),
 
-        ShadForm(
-          key: _step2FormKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Password Field
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Password',
-                    style: ShadTheme.of(context).textTheme.p.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ShadInputFormField(
-                    controller: _passwordController,
-                    placeholder: const Text('Create a strong password'),
-                    obscureText: _obscurePassword,
-                    textInputAction: TextInputAction.next,
-                    validator: Validators.validatePassword,
-                    leading: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        LucideIcons.lock,
-                        size: 18,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    trailing: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: GestureDetector(
-                        onTap: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                        child: Icon(
-                          _obscurePassword
-                              ? LucideIcons.eyeOff
-                              : LucideIcons.eye,
-                          size: 18,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                    ),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: ShadDecoration(
-                      border: ShadBorder.all(color: Colors.grey[700]!),
-                    ),
-                  ),
-                ],
+          _buildCompactTextField(
+            controller: _emailController,
+            label: 'Email Address',
+            hint: 'Enter your email address',
+            icon: LucideIcons.mail,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            validator: Validators.validateEmail,
+          ),
+
+          _buildCompactTextField(
+            controller: _phoneController,
+            label: 'Phone Number',
+            hint: 'Enter your phone number',
+            icon: LucideIcons.phone,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+            validator: Validators.validatePhoneNumber,
+          ),
+
+          _buildCompactTextField(
+            controller: _dateOfBirthController,
+            label: 'Date of Birth',
+            hint: 'Select your date of birth',
+            icon: LucideIcons.calendar,
+            readOnly: true,
+            onTap: _selectDateOfBirth,
+            validator: (value) =>
+                Validators.validateRequired(value, 'Date of birth'),
+            trailing: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Icon(
+                LucideIcons.chevronDown,
+                size: 18,
+                color: Colors.grey,
               ),
+            ),
+          ),
 
-              const SizedBox(height: 20),
-
-              // Confirm Password Field
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Confirm Password',
-                    style: ShadTheme.of(context).textTheme.p.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.info, color: Colors.blue, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'You must be 18 or older to register',
+                    style: TextStyle(color: Colors.blue[200], fontSize: 12),
                   ),
-                  const SizedBox(height: 8),
-                  ShadInputFormField(
-                    controller: _confirmPasswordController,
-                    placeholder: const Text('Confirm your password'),
-                    obscureText: _obscureConfirmPassword,
-                    textInputAction: TextInputAction.done,
-                    validator: (value) =>
-                        Validators.validateRequired(value, 'Confirm password'),
-                    leading: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        LucideIcons.lockKeyhole,
-                        size: 18,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    trailing: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: GestureDetector(
-                        onTap: () => setState(
-                          () => _obscureConfirmPassword =
-                              !_obscureConfirmPassword,
-                        ),
-                        child: Icon(
-                          _obscureConfirmPassword
-                              ? LucideIcons.eyeOff
-                              : LucideIcons.eye,
-                          size: 18,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                    ),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: ShadDecoration(
-                      border: ShadBorder.all(color: Colors.grey[700]!),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Password requirements
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[700]!),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Password Requirements:',
-                      style: ShadTheme.of(context).textTheme.small.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '• At least 8 characters long\n'
-                      '• Contains uppercase and lowercase letters\n'
-                      '• Contains at least one number\n'
-                      '• Contains at least one special character',
-                      style: ShadTheme.of(
-                        context,
-                      ).textTheme.small.copyWith(color: Colors.grey[400]),
-                    ),
-                  ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Step 2: Address Information
+  Widget _buildStep2Address() {
+    return ShadForm(
+      key: _step2FormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Address Information',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please provide your current address',
+            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 24),
+
+          _buildCompactTextField(
+            controller: _streetController,
+            label: 'Street Address',
+            hint: 'Enter your street address',
+            icon: LucideIcons.mapPin,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            validator: (value) =>
+                Validators.validateRequired(value, 'Street address'),
+          ),
+
+          _buildCompactTextField(
+            controller: _cityController,
+            label: 'City',
+            hint: 'Enter your city',
+            icon: LucideIcons.building,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            validator: (value) => Validators.validateRequired(value, 'City'),
+          ),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactTextField(
+                  controller: _stateController,
+                  label: 'State/Province',
+                  hint: 'State',
+                  icon: LucideIcons.map,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                  validator: (value) =>
+                      Validators.validateRequired(value, 'State'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildCompactTextField(
+                  controller: _zipCodeController,
+                  label: 'Zip Code',
+                  hint: '12345',
+                  icon: LucideIcons.hash,
+                  textInputAction: TextInputAction.next,
+                  validator: (value) =>
+                      Validators.validateRequired(value, 'Zip code'),
                 ),
               ),
             ],
           ),
-        ),
-      ],
+
+          _buildCompactTextField(
+            controller: _countryController,
+            label: 'Country',
+            hint: 'Enter your country',
+            icon: LucideIcons.globe,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.words,
+            validator: (value) => Validators.validateRequired(value, 'Country'),
+          ),
+        ],
+      ),
     );
   }
 
-  /// Step 3: Investment Plan
-  Widget _buildStep3Investment() {
-    final plansState = ref.watch(plansProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-
-        Text(
-          'Investment Plan',
-          style: ShadTheme.of(context).textTheme.h2.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+  /// Step 3: Security
+  Widget _buildStep3Security() {
+    return ShadForm(
+      key: _step3FormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Account Security',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Choose the plan that best fits your investment goals',
-          style: ShadTheme.of(
-            context,
-          ).textTheme.p.copyWith(color: Colors.grey[400]),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            'Create a secure password for your account',
+            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 24),
 
-        const SizedBox(height: 32),
+          _buildCompactTextField(
+            controller: _passwordController,
+            label: 'Password',
+            hint: 'Create a strong password',
+            icon: LucideIcons.lock,
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.next,
+            validator: Validators.validatePassword,
+            trailing: GestureDetector(
+              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  _obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye,
+                  size: 18,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+          ),
 
-        ShadForm(
-          key: _step3FormKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Loading state
-              if (plansState.isLoading)
-                Center(
-                  child: Column(
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Loading investment plans...',
-                        style: ShadTheme.of(
-                          context,
-                        ).textTheme.p.copyWith(color: Colors.grey[400]),
-                      ),
-                    ],
+          _buildCompactTextField(
+            controller: _confirmPasswordController,
+            label: 'Confirm Password',
+            hint: 'Confirm your password',
+            icon: LucideIcons.lockKeyhole,
+            obscureText: _obscureConfirmPassword,
+            textInputAction: TextInputAction.done,
+            validator: (value) =>
+                Validators.validateRequired(value, 'Confirm password'),
+            trailing: GestureDetector(
+              onTap: () => setState(
+                () => _obscureConfirmPassword = !_obscureConfirmPassword,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  _obscureConfirmPassword
+                      ? LucideIcons.eyeOff
+                      : LucideIcons.eye,
+                  size: 18,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+          ),
+
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[700]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Password Requirements:',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
-                )
-              // Error state
-              else if (plansState.hasError)
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        LucideIcons.circleAlert,
-                        color: Colors.red,
-                        size: 40,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Failed to load plans',
-                        style: ShadTheme.of(context).textTheme.p.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+                ),
+                const SizedBox(height: 6),
+                ...[
+                  '8+ characters',
+                  'Upper & lowercase',
+                  'Numbers',
+                  'Special characters',
+                ].map(
+                  (req) => Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          LucideIcons.check,
+                          size: 12,
+                          color: Colors.grey,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        plansState.error ?? 'Unknown error occurred',
-                        style: ShadTheme.of(
-                          context,
-                        ).textTheme.small.copyWith(color: Colors.grey[400]),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ShadButton.outline(
-                        onPressed: () =>
-                            ref.read(plansProvider.notifier).refresh(),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              // Plans list
-              else if (plansState.hasPlans)
-                ...List.generate(plansState.plans.length, (index) {
-                  final plan = plansState.plans[index];
-                  final isSelected = _selectedPlan == plan.id;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedPlan = plan.id);
-                        ref.read(plansProvider.notifier).selectPlan(plan);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.blue.withOpacity(0.1)
-                              : Colors.grey[900],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? Colors.blue : Colors.grey[700]!,
-                            width: 2,
+                        const SizedBox(width: 6),
+                        Text(
+                          req,
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 11,
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? Colors.blue
-                                        : Colors.transparent,
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? Colors.blue
-                                          : Colors.grey[600]!,
-                                    ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(
-                                          LucideIcons.check,
-                                          size: 12,
-                                          color: Colors.white,
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        plan.name,
-                                        style: ShadTheme.of(context).textTheme.p
-                                            .copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                      if (plan.badgeText != null) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: plan.isFree
-                                                ? Colors.green
-                                                : Colors.orange,
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            plan.badgeText!,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      plan.dailyReturnEstimate,
-                                      style: ShadTheme.of(context).textTheme.p
-                                          .copyWith(
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    Text(
-                                      'daily',
-                                      style: ShadTheme.of(context)
-                                          .textTheme
-                                          .small
-                                          .copyWith(
-                                            color: Colors.grey[400],
-                                            fontSize: 10,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              plan.description,
-                              style: ShadTheme.of(context).textTheme.small
-                                  .copyWith(color: Colors.grey[400]),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Text(
-                                  'Price: ',
-                                  style: ShadTheme.of(context).textTheme.small
-                                      .copyWith(color: Colors.grey[400]),
-                                ),
-                                Text(
-                                  plan.formattedPrice,
-                                  style: ShadTheme.of(context).textTheme.small
-                                      .copyWith(
-                                        color: plan.isFree
-                                            ? Colors.green
-                                            : Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                                const SizedBox(width: 16),
-                                Text(
-                                  'Min Deposit: ',
-                                  style: ShadTheme.of(context).textTheme.small
-                                      .copyWith(color: Colors.grey[400]),
-                                ),
-                                Text(
-                                  '${plan.currency} ${plan.limits.formattedMinDeposit}',
-                                  style: ShadTheme.of(context).textTheme.small
-                                      .copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
-                            ),
-                            if (plan.features.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                children: plan.features.take(4).map((feature) {
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? Colors.blue.withOpacity(0.2)
-                                          : Colors.grey[800],
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      feature,
-                                      style: ShadTheme.of(context)
-                                          .textTheme
-                                          .small
-                                          .copyWith(
-                                            color: isSelected
-                                                ? Colors.blue[200]
-                                                : Colors.grey[400],
-                                            fontSize: 11,
-                                          ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                              if (plan.features.length > 4)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    '+${plan.features.length - 4} more features',
-                                    style: ShadTheme.of(context).textTheme.small
-                                        .copyWith(
-                                          color: Colors.grey[500],
-                                          fontSize: 10,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                  ),
-                                ),
-                            ],
-                          ],
-                        ),
-                      ),
+                      ],
                     ),
-                  );
-                })
-              // No plans available
-              else
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(LucideIcons.package, color: Colors.orange, size: 40),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Plans temporarily unavailable',
-                        style: ShadTheme.of(context).textTheme.p.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'You can still create your account and choose a plan later from your dashboard.',
-                        style: ShadTheme.of(
-                          context,
-                        ).textTheme.small.copyWith(color: Colors.grey[400]),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ShadButton.outline(
-                        onPressed: () {
-                          // Set to null to skip plan selection
-                          setState(() => _selectedPlan = null);
-                          ref.read(plansProvider.notifier).refresh();
-                        },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(LucideIcons.refreshCw, size: 16),
-                            const SizedBox(width: 8),
-                            const Text('Retry Loading Plans'),
-                          ],
-                        ),
-                      ),
-                    ],
                   ),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 20),
+  /// Step 4: Investment Plan
+  Widget _buildStep4Investment() {
+    final plansState = ref.watch(plansProvider);
 
-              // Referral Code Field (Optional)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return ShadForm(
+      key: _step4FormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Investment Plan',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Choose your investment strategy',
+            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 24),
+
+          if (plansState.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (plansState.hasError)
+            _buildErrorState(plansState.error!)
+          else if (plansState.hasPlans)
+            ...plansState.plans.map((plan) => _buildCompactPlanCard(plan))
+          else
+            _buildNoPlanState(),
+
+          const SizedBox(height: 16),
+
+          _buildCompactTextField(
+            controller: _referralCodeController,
+            label: 'Referral Code (Optional)',
+            hint: 'Enter referral code',
+            icon: LucideIcons.gift,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.characters,
+            validator: Validators.validateReferralCode,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactPlanCard(dynamic plan) {
+    final isSelected = _selectedPlan == plan.id;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _selectedPlan = plan.id);
+          ref.read(plansProvider.notifier).selectPlan(plan);
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey[900],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? Colors.blue : Colors.grey[700]!,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Text(
-                    'Referral Code (Optional)',
-                    style: ShadTheme.of(context).textTheme.p.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue : Colors.transparent,
+                      border: Border.all(
+                        color: isSelected ? Colors.blue : Colors.grey[600]!,
+                      ),
+                      shape: BoxShape.circle,
                     ),
+                    child: isSelected
+                        ? const Icon(
+                            LucideIcons.check,
+                            size: 10,
+                            color: Colors.white,
+                          )
+                        : null,
                   ),
-                  const SizedBox(height: 8),
-                  ShadInputFormField(
-                    controller: _referralCodeController,
-                    placeholder: const Text('Enter referral code for bonus'),
-                    textInputAction: TextInputAction.done,
-                    textCapitalization: TextCapitalization.characters,
-                    validator: Validators.validateReferralCode,
-                    leading: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        LucideIcons.gift,
-                        size: 18,
-                        color: Colors.grey[400],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      plan.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: ShadDecoration(
-                      border: ShadBorder.all(color: Colors.grey[700]!),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      plan.dailyReturnEstimate,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                plan.description,
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   Text(
-                    'Get bonus rewards when you use a referral code',
-                    style: ShadTheme.of(
-                      context,
-                    ).textTheme.small.copyWith(color: Colors.grey[500]),
+                    'Price: ',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                  Text(
+                    plan.formattedPrice,
+                    style: TextStyle(
+                      color: plan.isFree ? Colors.green : Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Min: ',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                  Text(
+                    '${plan.currency} ${plan.limits.formattedMinDeposit}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ],
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  /// Step 4: Confirmation
-  Widget _buildStep4Confirmation() {
+  Widget _buildErrorState(String error) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          const Icon(LucideIcons.circleAlert, color: Colors.red, size: 32),
+          const SizedBox(height: 8),
+          const Text(
+            'Failed to load plans',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(error, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () => ref.read(plansProvider.notifier).refresh(),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoPlanState() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          const Icon(LucideIcons.package, color: Colors.orange, size: 32),
+          const SizedBox(height: 8),
+          const Text(
+            'Plans Unavailable',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'You can choose a plan later',
+            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () {
+              setState(() => _selectedPlan = null);
+              ref.read(plansProvider.notifier).refresh();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Step 5: Confirmation
+  Widget _buildStep5Confirmation() {
     final plansState = ref.watch(plansProvider);
     final selectedPlan = plansState.plans
         .where((plan) => plan.id == _selectedPlan)
@@ -1131,393 +1025,245 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 20),
-
-        Text(
-          'Confirmation',
-          style: ShadTheme.of(context).textTheme.h2.copyWith(
-            color: Colors.white,
+        const Text(
+          'Review & Confirm',
+          style: TextStyle(
+            fontSize: 24,
             fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Review your information before creating your account',
-          style: ShadTheme.of(
-            context,
-          ).textTheme.p.copyWith(color: Colors.grey[400]),
+          'Please review your information',
+          style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+        ),
+        const SizedBox(height: 24),
+
+        // Compact review sections
+        _buildCompactReviewSection('Personal', [
+          'Name: ${_nameController.text}',
+          'Email: ${_emailController.text}',
+          'Phone: ${_phoneController.text}',
+          'DOB: ${_dateOfBirthController.text}',
+        ]),
+
+        const SizedBox(height: 16),
+
+        _buildCompactReviewSection('Address', [
+          'Street: ${_streetController.text}',
+          'City: ${_cityController.text}',
+          'State: ${_stateController.text}',
+          'Country: ${_countryController.text}',
+        ]),
+
+        const SizedBox(height: 16),
+
+        _buildCompactReviewSection('Investment', [
+          'Plan: ${selectedPlan?.name ?? 'No plan selected'}',
+          if (selectedPlan != null) 'Price: ${selectedPlan.formattedPrice}',
+          if (_referralCodeController.text.isNotEmpty)
+            'Referral: ${_referralCodeController.text}',
+        ]),
+
+        const SizedBox(height: 24),
+
+        // Compact checkboxes
+        _buildCompactCheckbox(
+          value: _acceptTerms,
+          onChanged: (value) => setState(() => _acceptTerms = value ?? false),
+          title: 'I accept the Terms of Service',
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 12),
 
-        // Review Information
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[700]!),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Account Information',
-                style: ShadTheme.of(context).textTheme.p.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildInfoRow('Name', _nameController.text),
-              _buildInfoRow('Email', _emailController.text),
-              _buildInfoRow('Phone', _phoneController.text),
-              _buildInfoRow('Plan', selectedPlan?.name ?? 'Unknown Plan'),
-              if (selectedPlan != null)
-                _buildInfoRow('Plan Price', selectedPlan.formattedPrice),
-              if (_referralCodeController.text.isNotEmpty)
-                _buildInfoRow('Referral Code', _referralCodeController.text),
-            ],
-          ),
+        _buildCompactCheckbox(
+          value: _acceptPrivacy,
+          onChanged: (value) => setState(() => _acceptPrivacy = value ?? false),
+          title: 'I accept the Privacy Policy',
         ),
 
         const SizedBox(height: 24),
 
-        // Terms and Privacy Checkboxes
-        Column(
-          children: [
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _acceptTerms = !_acceptTerms),
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: _acceptTerms ? Colors.blue : Colors.transparent,
-                      border: Border.all(
-                        color: _acceptTerms ? Colors.blue : Colors.grey[600]!,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: _acceptTerms
-                        ? const Icon(
-                            LucideIcons.check,
-                            size: 14,
-                            color: Colors.white,
-                          )
-                        : null,
+        // Social options
+        Center(
+          child: Column(
+            children: [
+              Text(
+                'Or register with',
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildSocialButton(
+                    LucideIcons.chrome,
+                    'Google',
+                    () => _handleSocialRegister('Google'),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Wrap(
-                    children: [
-                      Text(
-                        'I accept the ',
-                        style: ShadTheme.of(
-                          context,
-                        ).textTheme.small.copyWith(color: Colors.grey[300]),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              backgroundColor: Colors.grey[900],
-                              title: const Text(
-                                'Terms of Service',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              content: const Text(
-                                'Terms of Service content would be displayed here.',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Close'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: Text(
-                          'Terms of Service',
-                          style: ShadTheme.of(context).textTheme.small.copyWith(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w500,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 12),
+                  _buildSocialButton(
+                    LucideIcons.apple,
+                    'Apple',
+                    () => _handleSocialRegister('Apple'),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _acceptPrivacy = !_acceptPrivacy),
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: _acceptPrivacy ? Colors.blue : Colors.transparent,
-                      border: Border.all(
-                        color: _acceptPrivacy ? Colors.blue : Colors.grey[600]!,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: _acceptPrivacy
-                        ? const Icon(
-                            LucideIcons.check,
-                            size: 14,
-                            color: Colors.white,
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Wrap(
-                    children: [
-                      Text(
-                        'I accept the ',
-                        style: ShadTheme.of(
-                          context,
-                        ).textTheme.small.copyWith(color: Colors.grey[300]),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              backgroundColor: Colors.grey[900],
-                              title: const Text(
-                                'Privacy Policy',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              content: const Text(
-                                'Privacy Policy content would be displayed here.',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Close'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: Text(
-                          'Privacy Policy',
-                          style: ShadTheme.of(context).textTheme.small.copyWith(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w500,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 32),
-
-        // Social Registration Option
-        Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: Divider(color: Colors.grey[700])),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'Or register with',
-                    style: ShadTheme.of(
-                      context,
-                    ).textTheme.small.copyWith(color: Colors.grey[400]),
-                  ),
-                ),
-                Expanded(child: Divider(color: Colors.grey[700])),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Google Registration
-                GestureDetector(
-                  onTap: () => _handleSocialRegister('Google'),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey[700]!),
-                    ),
-                    child: const Icon(
-                      LucideIcons.chrome,
-                      color: Colors.red,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Apple Registration
-                GestureDetector(
-                  onTap: () => _handleSocialRegister('Apple'),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey[700]!),
-                    ),
-                    child: const Icon(
-                      LucideIcons.apple,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  /// Build info row for review section
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: ShadTheme.of(
-                context,
-              ).textTheme.small.copyWith(color: Colors.grey[400]),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: ShadTheme.of(context).textTheme.small.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build navigation buttons
-  Widget _buildNavigationButtons(AuthenticationState authState) {
+  Widget _buildCompactReviewSection(String title, List<String> items) {
     return Container(
-      padding: AppConstants.paddingHorizontalMD,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey[900],
-        border: Border(top: BorderSide(color: Colors.grey[800]!)),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[700]!),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Main action button
-          ShadButton(
-            onPressed: (_deviceId != null && !authState.isLoading)
-                ? _nextStep
-                : null,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  _currentStep == _steps.length - 1
-                      ? 'Create Account'
-                      : 'Continue',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  _currentStep == _steps.length - 1
-                      ? LucideIcons.userPlus
-                      : LucideIcons.arrowRight,
-                  size: 18,
-                ),
-              ],
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Navigation row
-          Row(
-            children: [
-              // Back button
-              if (_currentStep > 0)
-                ShadButton.outline(
-                  onPressed: _previousStep,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(LucideIcons.arrowLeft, size: 16),
-                      const SizedBox(width: 8),
-                      const Text('Back'),
-                    ],
-                  ),
-                )
-              else
-                const SizedBox(),
-
-              const Spacer(),
-
-              // Login link
-              GestureDetector(
-                onTap: () => context.push(RoutePaths.login),
-                child: Text(
-                  'Already have an account? Sign in',
-                  style: ShadTheme.of(context).textTheme.small.copyWith(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+          const SizedBox(height: 8),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                item,
+                style: TextStyle(color: Colors.grey[300], fontSize: 12),
               ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
-}
 
-/// Step information model
-class StepInfo {
-  final String title;
-  final String description;
-  final IconData icon;
+  Widget _buildCompactCheckbox({
+    required bool value,
+    required ValueChanged<bool?> onChanged,
+    required String title,
+  }) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Row(
+        children: [
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: value ? Colors.blue : Colors.transparent,
+              border: Border.all(
+                color: value ? Colors.blue : Colors.grey[600]!,
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: value
+                ? const Icon(LucideIcons.check, size: 12, color: Colors.white)
+                : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(color: Colors.grey[300], fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  StepInfo({
-    required this.title,
-    required this.description,
-    required this.icon,
-  });
+  Widget _buildSocialButton(IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[700]!),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build compact bottom navigation
+  Widget _buildBottomNavigation(AuthenticationState authState) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1A1A),
+        border: Border(top: BorderSide(color: Color(0xFF2A2A2A))),
+      ),
+      child: Row(
+        children: [
+          // Back button
+          if (_currentStep > 0)
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _previousStep,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey[600]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Back', style: TextStyle(color: Colors.grey)),
+              ),
+            )
+          else
+            const Expanded(child: SizedBox()),
+
+          if (_currentStep > 0) const SizedBox(width: 12),
+
+          // Continue/Create button
+          Expanded(
+            flex: 2,
+            child: ElevatedButton(
+              onPressed: (_deviceId != null && !authState.isLoading)
+                  ? _nextStep
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                _currentStep == _stepTitles.length - 1
+                    ? 'Create Account'
+                    : 'Continue',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
